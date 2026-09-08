@@ -40,7 +40,7 @@ In `bro.js`, everything you need is handed to you instantly. No setup, no middle
 `routes/posts/[id].post.js`:
 
 ```javascript
-import { defineRoute, z } from 'bro.js';
+import { defineRoute, z } from 'bro-framework';
 
 export default defineRoute({
   auth: true,

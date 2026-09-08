@@ -1,0 +1,55 @@
+# bro.js - AI Context Document
+
+## Core Philosophy
+bro.js is a zero-boilerplate Node.js backend framework. It acts as an extremely thin, high-powered wrapper around Express, Zod, and Socket.io. It enforces pure ES Modules (no TS, no CommonJS).
+
+## Routing
+Routing is file-system based.
+- Path: `routes/`
+- Syntax: `routes/folder/[param].method.js` -> `METHOD /folder/:param`
+- Example: `routes/users/[id].get.js` maps to `GET /users/:id`
+
+## Route Definition (defineRoute)
+Every route must default export `defineRoute`.
+
+```javascript
+import { defineRoute, z } from 'bro-framework';
+
+export default defineRoute({
+  auth: true, // Auto-verifies JWT and injects `ctx.user`
+  upload: true, // Auto-parses multipart forms and injects `ctx.files`
+  body: z.object({ /* schema */ }), // Auto-rejects invalid bodies with 400
+  params: z.object({ /* schema */ }), // Validates URL params
+  query: z.object({ /* schema */ }), // Validates query strings
+  rateLimit: { windowMs: 60000, max: 10 }, // Route-specific throttling
+  
+  handler: async (ctx) => {
+    // Return object to auto-send 200 JSON
+    return { status: "ok" }; 
+  }
+});
+```
+
+## The Context Object (ctx)
+The handler function receives a destructured context:
+- `ctx.body` / `ctx.params` / `ctx.query`: Pre-validated Zod outputs.
+- `ctx.user`: Decoded JWT payload (requires `auth: true`).
+- `ctx.db`: Injected global database connection instance.
+- `ctx.io`: Injected global Socket.io server instance.
+- `ctx.files`: Uploaded `multer` files (requires `upload: true`).
+
+## Configuration (bro.config.js)
+The global `bro.config.js` configures the server, database injection, and sockets.
+
+```javascript
+import { defineConfig, z } from 'bro-framework';
+
+export default defineConfig({
+  env: z.object({ PORT: z.string() }), // Strict boot env validation
+  server: { port: 5000, cors: true },
+  auth: { jwtSecret: 'secret', expiresIn: '7d' },
+  rateLimit: { windowMs: 900000, max: 100 },
+  db: async () => { /* return DB connection */ },
+  sockets: async (io, db) => { /* setup socket.io */ }
+});
+```

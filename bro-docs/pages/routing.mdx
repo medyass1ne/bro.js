@@ -7,7 +7,7 @@
 Create `routes/hello.get.js`:
 
 ```javascript
-import { defineRoute } from 'bro.js';
+import { defineRoute } from 'bro-framework';
 
 export default defineRoute({
   handler: async () => {
@@ -23,7 +23,7 @@ Need path parameters? Just use brackets!
 Create `routes/users/[id].get.js`:
 
 ```javascript
-import { defineRoute, z } from 'bro.js';
+import { defineRoute, z } from 'bro-framework';
 
 export default defineRoute({
   params: z.object({ id: z.string() }),

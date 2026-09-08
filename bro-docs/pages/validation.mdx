@@ -7,7 +7,7 @@ Say goodbye to manual `if (!req.body.name) return res.status(400)` checks. `bro.
 When you define a route, you can attach a Zod schema to `body`, `params`, or `query`. If the incoming request doesn't perfectly match the schema, the framework automatically rejects it with a clean `400 Bad Request` JSON payload *before* your handler even runs.
 
 ```javascript
-import { defineRoute, z } from 'bro.js';
+import { defineRoute, z } from 'bro-framework';
 
 export default defineRoute({
   // Validate the JSON body

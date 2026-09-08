@@ -1,7 +1,7 @@
 {
-  "name": "bro.js",
-  "version": "1.0.0",
-  "description": "Ultra-minimal backend framework",
+  "name": "bro-framework",
+  "version": "1.2.3",
+  "description": "The No-BS Backend Framework for Node.js",
   "main": "src/index.js",
   "type": "module",
   "exports": {
@@ -10,9 +10,10 @@
   "bin": {
     "bro": "./bin/bro.js"
   },
-  "scripts": {
-    "dev": "node ./bin/bro.js"
-  },
+  "files": [
+    "src",
+    "bin"
+  ],
   "dependencies": {
     "@scalar/express-api-reference": "^0.10.18",
     "chokidar": "^5.0.0",

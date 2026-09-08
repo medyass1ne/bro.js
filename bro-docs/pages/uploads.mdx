@@ -7,7 +7,7 @@ Uploading files with Express usually requires wrestling with `multer` middleware
 Simply add `upload: true` to your route configuration. The framework will automatically parse `multipart/form-data` requests and inject the file objects right into your context.
 
 ```javascript
-import { defineRoute } from 'bro.js';
+import { defineRoute } from 'bro-framework';
 
 export default defineRoute({
   upload: true, // That's literally it.

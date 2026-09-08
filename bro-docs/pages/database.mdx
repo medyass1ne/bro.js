@@ -7,7 +7,7 @@ Connecting to a database shouldn't require global singletons or messy imports in
 In your `bro.config.js`, define an async `db` function. For example, using Mongoose:
 
 ```javascript
-import { defineConfig } from 'bro.js';
+import { defineConfig } from 'bro-framework';
 import mongoose from 'mongoose';
 
 export default defineConfig({
@@ -26,7 +26,7 @@ export default defineConfig({
 Now, simply destructure `db` from your handler context.
 
 ```javascript
-import { defineRoute } from 'bro.js';
+import { defineRoute } from 'bro-framework';
 
 export default defineRoute({
   handler: async ({ db, body }) => {

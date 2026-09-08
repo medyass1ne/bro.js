@@ -26,7 +26,7 @@ export default defineConfig({
 The `io` instance is injected into every single API route context. This means you can broadcast real-time events the exact millisecond a database update finishes.
 
 ```javascript
-import { defineRoute } from 'bro.js';
+import { defineRoute } from 'bro-framework';
 
 export default defineRoute({
   handler: async ({ body, db, io }) => {
