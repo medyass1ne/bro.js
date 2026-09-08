@@ -1,0 +1,16 @@
+{
+  "index": "Introduction",
+  "getting-started": "Getting Started",
+  "routing": "File-Based Routing",
+  "validation": "Zod Validation",
+  "auth": "Authentication & JWT",
+  "database": "Database Injection",
+  "websockets": "WebSockets (Socket.io)",
+  "uploads": "File Uploads",
+  "rate-limiting": "Rate Limiting",
+  "tasks": "Background Tasks (CRON)",
+  "sdk": "Auto-Generated SDK",
+  "docs": "Live API Docs (Scalar)",
+  "config": "Configuration & Env",
+  "cli": "CLI Reference"
+}

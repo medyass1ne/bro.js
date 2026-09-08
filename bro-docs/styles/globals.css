@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-neutral-50 dark:bg-[#111111] text-neutral-900 dark:text-neutral-100;
+  }
+  
+  .dark body {
+    background: radial-gradient(circle at 50% -20%, #1a1a2e, #111111 50%);
+  }
+}

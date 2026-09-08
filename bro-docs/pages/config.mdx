@@ -1,0 +1,42 @@
+# Configuration & Env
+
+Your entire framework behavior is controlled by a single file at the root of your project: `bro.config.js`.
+
+## The Template
+
+```javascript
+import { defineConfig, z } from 'bro.js';
+
+export default defineConfig({
+  // Strictly validate process.env on boot!
+  env: z.object({
+    PORT: z.string().default('5000'),
+    MONGO_URI: z.string().url()
+  }),
+
+  server: {
+    port: 5000,
+    cors: true 
+  },
+
+  auth: {
+    jwtSecret: process.env.JWT_SECRET || 'dev_secret_please_change',
+    expiresIn: '7d'
+  },
+  
+  docs: process.env.NODE_ENV !== 'production',
+
+  rateLimit: {
+    windowMs: 15 * 60 * 1000,
+    max: 100 
+  },
+
+  db: async () => { /* Connect to DB */ },
+  
+  sockets: async (io, db) => { /* Setup events */ }
+});
+```
+
+## Strict Env Validation
+
+If you define an `env` Zod schema, `bro.js` will execute `.safeParse(process.env)` before *anything* else boots. If a required environment variable is missing, the framework immediately crashes with a red error log, preventing bad deployments!

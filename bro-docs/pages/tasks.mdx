@@ -1,0 +1,25 @@
+# Background Tasks (CRON)
+
+Don't spin up a separate worker server just to run background jobs. `bro.js` handles scheduled tasks internally.
+
+## Creating a Task
+
+Create a `.js` file anywhere inside the `tasks/` directory. Export a `cron` schedule string and a `handler` function.
+
+`tasks/cleanup.js`:
+
+```javascript
+export const cron = "0 0 * * *"; // Runs every night at midnight
+
+export async function handler({ db, io }) {
+  console.log("🧹 Running nightly database cleanup...");
+  
+  // You have full access to your database!
+  await db.collection('sessions').deleteMany({ expired: true });
+  
+  // You can even emit WebSocket events to active users!
+  io.emit('system_notification', 'Nightly maintenance completed.');
+}
+```
+
+The framework automatically scans the `tasks/` folder on boot and schedules them.

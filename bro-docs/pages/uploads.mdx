@@ -1,0 +1,24 @@
+# File Uploads
+
+Uploading files with Express usually requires wrestling with `multer` middleware on a route-by-route basis. `bro.js` makes it a one-liner.
+
+## Zero-Boilerplate Uploads
+
+Simply add `upload: true` to your route configuration. The framework will automatically parse `multipart/form-data` requests and inject the file objects right into your context.
+
+```javascript
+import { defineRoute } from 'bro.js';
+
+export default defineRoute({
+  upload: true, // That's literally it.
+  handler: async ({ files, body }) => {
+    // files is an array of uploaded file objects (buffered in memory)
+    const uploadedImages = files.filter(f => f.mimetype.startsWith('image/'));
+    
+    return {
+      message: `Successfully received ${uploadedImages.length} images!`,
+      meta: body // You still get access to other form fields
+    };
+  }
+});
+```

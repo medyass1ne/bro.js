@@ -1,0 +1,35 @@
+# Rate Limiting
+
+Protect your API from abuse instantly. `bro.js` has `express-rate-limit` built right into the core engine.
+
+## Global Rate Limits
+
+You can protect your entire API globally by adding a `rateLimit` object to `bro.config.js`:
+
+```javascript
+export default defineConfig({
+  rateLimit: {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100 // limit each IP to 100 requests per window
+  }
+});
+```
+
+## Route-Specific Rate Limits
+
+Need stricter limits for sensitive endpoints like login or password reset? Just override it in the specific route file:
+
+```javascript
+import { defineRoute } from 'bro.js';
+
+export default defineRoute({
+  rateLimit: {
+    windowMs: 60 * 1000, // 1 minute
+    max: 5 // Only 5 attempts per minute!
+  },
+  handler: async ({ body }) => {
+    // Sensitive login logic...
+    return { token: "..." };
+  }
+});
+```

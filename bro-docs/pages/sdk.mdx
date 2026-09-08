@@ -1,0 +1,42 @@
+# Auto-Generated SDK
+
+Why write frontend `fetch` wrappers when the backend already knows what your endpoints are? 
+
+## The Magic Command
+
+Run the following command in your terminal:
+
+```bash
+bro sdk
+```
+
+`bro.js` will instantly parse your `routes/` folder and generate a `bro-client.js` file right in your directory.
+
+## Using the Client
+
+The generated client is a pure vanilla JavaScript `fetch` wrapper. It perfectly maps to your API structure.
+
+```javascript
+import { api, setBaseURL, setTokenKey } from './bro-client.js';
+
+// Setup (optional, defaults to localhost:5000 and 'bro_token')
+setBaseURL('https://api.myproduction.com');
+
+// The client automatically checks localStorage for your JWT
+// and attaches it as a Bearer token!
+
+async function fetchUser() {
+  // Maps to `GET /users/:id`
+  const user = await api.users.id('123').get();
+  console.log(user);
+}
+
+async function login(email, password) {
+  // Maps to `POST /auth/login`
+  // Automatically stringifies the body and sets Content-Type!
+  const response = await api.auth.login.post({ email, password });
+  
+  // Save the token, the client will use it automatically on the next request
+  localStorage.setItem('bro_token', response.token);
+}
+```

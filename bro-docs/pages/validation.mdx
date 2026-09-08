@@ -1,0 +1,32 @@
+# Zod Validation
+
+Say goodbye to manual `if (!req.body.name) return res.status(400)` checks. `bro.js` has bouncer-level validation built directly into the route definition using Zod.
+
+## How it works
+
+When you define a route, you can attach a Zod schema to `body`, `params`, or `query`. If the incoming request doesn't perfectly match the schema, the framework automatically rejects it with a clean `400 Bad Request` JSON payload *before* your handler even runs.
+
+```javascript
+import { defineRoute, z } from 'bro.js';
+
+export default defineRoute({
+  // Validate the JSON body
+  body: z.object({
+    email: z.string().email(),
+    age: z.number().min(18)
+  }),
+  
+  // Validate URL parameters (e.g. /users/:id)
+  params: z.object({
+    id: z.string().uuid()
+  }),
+  
+  handler: async ({ body, params }) => {
+    // If you reach here, `body` and `params` are 100% typed and safe.
+    return {
+      message: 'Welcome to the club!',
+      email: body.email
+    };
+  }
+});
+```

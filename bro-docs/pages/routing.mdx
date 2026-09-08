@@ -1,0 +1,35 @@
+# File-Based Routing
+
+`bro.js` uses a powerful file-system-based router. Any `.js` file inside the `routes/` directory automatically becomes an API endpoint.
+
+## Basic Example
+
+Create `routes/hello.get.js`:
+
+```javascript
+import { defineRoute } from 'bro.js';
+
+export default defineRoute({
+  handler: async () => {
+    return { message: 'Hello World!' };
+  }
+});
+```
+This instantly maps to `GET /hello`.
+
+## Dynamic Routes
+
+Need path parameters? Just use brackets!
+Create `routes/users/[id].get.js`:
+
+```javascript
+import { defineRoute, z } from 'bro.js';
+
+export default defineRoute({
+  params: z.object({ id: z.string() }),
+  handler: async ({ params }) => {
+    return { userId: params.id };
+  }
+});
+```
+This maps to `GET /users/:id` and strictly validates that `id` is a string!

@@ -1,0 +1,42 @@
+# WebSockets (Socket.io)
+
+Real-time capabilities are usually a massive pain to wire up alongside an Express REST API. Not in `bro.js`. WebSockets are treated as a first-class citizen.
+
+## Setup
+
+Enable and configure your sockets in `bro.config.js`:
+
+```javascript
+export default defineConfig({
+  sockets: async (io, db) => {
+    // This runs once on boot
+    io.on('connection', (socket) => {
+      console.log('🟢 Client connected:', socket.id);
+      
+      socket.on('ping', () => {
+        socket.emit('pong');
+      });
+    });
+  }
+});
+```
+
+## Emitting from Routes
+
+The `io` instance is injected into every single API route context. This means you can broadcast real-time events the exact millisecond a database update finishes.
+
+```javascript
+import { defineRoute } from 'bro.js';
+
+export default defineRoute({
+  handler: async ({ body, db, io }) => {
+    // 1. Save data
+    await db.collection('messages').insertOne(body);
+    
+    // 2. Alert all connected clients instantly!
+    io.emit('new_message', body);
+    
+    return { success: true };
+  }
+});
+```

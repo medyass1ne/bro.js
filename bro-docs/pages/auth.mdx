@@ -1,0 +1,23 @@
+# Authentication
+
+`bro.js` makes JWT authentication a breeze. No need to write middleware.
+
+## Protecting a Route
+
+To protect an endpoint, simply set `auth: true` in your route definition:
+
+```javascript
+import { defineRoute } from 'bro.js';
+
+export default defineRoute({
+  auth: true,
+  handler: async ({ user }) => {
+    return { 
+      message: 'You are authenticated!',
+      userId: user.id 
+    };
+  }
+});
+```
+
+When a user sends a request, `bro.js` automatically checks for an `Authorization: Bearer <token>` header, verifies it using your configured `jwtSecret`, and injects the decoded payload into `ctx.user`.

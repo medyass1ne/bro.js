@@ -1,0 +1,32 @@
+# Live API Docs (Scalar)
+
+Writing YAML for OpenAPI/Swagger is tedious. `bro.js` generates stunning, interactive API documentation automatically using your existing Zod schemas.
+
+## How to view
+
+Simply boot up your dev server and navigate to:
+
+```text
+http://localhost:5000/docs
+```
+
+You'll be greeted by a beautiful [Scalar](https://scalar.com/) interface documenting every single route, complete with request body schemas, parameter requirements, and an interactive "Try It" playground.
+
+The raw JSON spec is available at `/docs/json`.
+
+## Production Security
+
+By default, the `/docs` endpoints are completely disabled when `process.env.NODE_ENV === 'production'`.
+
+If you want to force them to be exposed in production, or secure them with Basic Auth, configure it in `bro.config.js`:
+
+```javascript
+export default defineConfig({
+  docs: {
+    auth: {
+      user: 'admin',
+      pass: 'supersecret'
+    }
+  }
+});
+```

@@ -1,0 +1,39 @@
+# Database Injection
+
+Connecting to a database shouldn't require global singletons or messy imports in every file. `bro.js` handles database initialization once and injects it directly into every route's context.
+
+## Setup in Configuration
+
+In your `bro.config.js`, define an async `db` function. For example, using Mongoose:
+
+```javascript
+import { defineConfig } from 'bro.js';
+import mongoose from 'mongoose';
+
+export default defineConfig({
+  db: async () => {
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log("Connected to MongoDB!");
+    
+    // You can return the connection, or an object containing your models
+    return mongoose.connection;
+  }
+});
+```
+
+## Using it in your Routes
+
+Now, simply destructure `db` from your handler context.
+
+```javascript
+import { defineRoute } from 'bro.js';
+
+export default defineRoute({
+  handler: async ({ db, body }) => {
+    // `db` is exactly what you returned in bro.config.js
+    const result = await db.collection('users').insertOne(body);
+    
+    return { success: true, id: result.insertedId };
+  }
+});
+```
