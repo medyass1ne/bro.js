@@ -161,7 +161,7 @@ Add `upload: true` to a route. `bro.js` automatically hooks into `multer`, parse
 | Command | Description |
 | :--- | :--- |
 | `bro dev` | Development server featuring instant boot, visual CLI banner, and `chokidar`-powered hot module remapping. |
-| `bro start` | Production runner locked down for security. Zero watcher overhead, suppressed internal logs, and isolated API docs. |
+| `bro start` &nbsp; | Production runner locked down for security. Zero watcher overhead, suppressed internal logs, and isolated API docs. |
 | `bro init` | Automated workspace scaffolder. Generates configuration files and forcefully ensures your `package.json` respects `"type": "module"`. |
 | `bro sdk` | Route parser and browser client compiler. Generates your frontend SDK in one hit. |
 
