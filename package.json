@@ -1,6 +1,6 @@
 {
   "name": "bro-framework",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "The No-BS Backend Framework for Node.js",
   "main": "src/index.js",
   "type": "module",

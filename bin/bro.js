@@ -20,7 +20,7 @@ if (command === 'dev') {
   process.env.NODE_ENV = 'production';
 }
 
-const CONFIG_TEMPLATE = `import { defineConfig } from 'bro.js';
+const CONFIG_TEMPLATE = `import { defineConfig } from 'bro-framework';
 
 export default defineConfig({
   // Server Settings
