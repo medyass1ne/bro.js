@@ -53,3 +53,7 @@ export default defineConfig({
   sockets: async (io, db) => { /* setup socket.io */ }
 });
 ```
+## Links & References
+- [Official Documentation](https://brojs.yessindevs.me)
+- [GitHub Repository](https://github.com/medyassine/bro.js)
+- [npm Package](https://www.npmjs.com/package/bro-framework)

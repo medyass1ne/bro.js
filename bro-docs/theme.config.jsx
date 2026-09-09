@@ -18,8 +18,7 @@ export default {
   toc: {
     float: true
   },
-  docsRepositoryBase: 'https://github.com/medyass1ne/bro.js/tree/main/bro-docs',
   editLink: {
-    text: null,
-  },
+    component: () => null
+  }
 }
