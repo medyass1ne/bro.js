@@ -1,5 +1,5 @@
 export default {
-  logo: <span>bro.js</span>,
+  logo: <img src="/bro.js-124-nobg.png" alt="bro.js Logo" width="64" height="64" />,
   project: {
     link: 'https://github.com/medyass1ne/bro.js'
   },
