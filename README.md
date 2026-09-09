@@ -1,4 +1,5 @@
 <p align="center">
+  <img src="https://brojs.yessindevs.me/bro.js.png" alt="bro.js Logo" width="256" height="256">
   <h1 align="center">bro.js</h1>
   <p align="center">
     <strong>The zero-boilerplate Node.js framework that actually has your back.</strong>
