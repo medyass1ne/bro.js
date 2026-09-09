@@ -1,9 +1,11 @@
-import { ZodType } from 'zod';
+import { z, ZodTypeAny } from 'zod';
 
-export interface BroContext {
-  body?: any;
-  params?: any;
-  query?: any;
+type InferZod<T> = T extends ZodTypeAny ? z.infer<T> : any;
+
+export interface BroContext<Body = any, Params = any, Query = any> {
+  body: InferZod<Body>;
+  params: InferZod<Params>;
+  query: InferZod<Query>;
   user?: any;
   db?: any;
   io?: any;
@@ -11,24 +13,26 @@ export interface BroContext {
   error?: any;
 }
 
-export interface RouteConfig {
+export interface RouteConfig<Body = any, Params = any, Query = any> {
   auth?: boolean;
   upload?: boolean;
-  body?: ZodType<any, any, any>;
-  params?: ZodType<any, any, any>;
-  query?: ZodType<any, any, any>;
+  body?: Body;
+  params?: Params;
+  query?: Query;
   rateLimit?: {
     windowMs: number;
     max: number;
   };
   summary?: string;
-  handler: (ctx: BroContext) => Promise<any> | any;
+  handler: (ctx: BroContext<Body, Params, Query>) => Promise<any> | any;
 }
 
-export function defineRoute(config: RouteConfig): RouteConfig;
+export function defineRoute<Body = any, Params = any, Query = any>(
+  config: RouteConfig<Body, Params, Query>
+): RouteConfig<Body, Params, Query>;
 
 export interface BroConfig {
-  env?: ZodType<any, any, any>;
+  env?: ZodTypeAny;
   server?: {
     port?: number;
     cors?: boolean | object;

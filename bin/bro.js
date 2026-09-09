@@ -3,6 +3,10 @@
 import path from 'path';
 import fs from 'fs';
 import { pathToFileURL } from 'url';
+import { register } from 'tsx/esm/api';
+
+register();
+
 import { createServer } from '../src/server.js';
 import { colors, printBanner, printRoute, printHotReload } from '../src/logger.js';
 import { scanTasks } from '../src/tasks.js';
@@ -218,7 +222,7 @@ async function bootstrap() {
       const watcher = chokidar.watch(routesDir, { ignoreInitial: true });
       
       watcher.on('all', async (event, filepath) => {
-        if (!filepath.endsWith('.js')) return;
+        if (!filepath.endsWith('.js') && !filepath.endsWith('.ts')) return;
         
         try {
           const reloadStartTime = performance.now();

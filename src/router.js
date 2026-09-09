@@ -18,7 +18,7 @@ export function scanDir(dir, fileList = []) {
     const filePath = path.join(dir, file);
     if (fs.statSync(filePath).isDirectory()) {
       scanDir(filePath, fileList);
-    } else if (filePath.endsWith('.js')) {
+    } else if (filePath.endsWith('.js') || filePath.endsWith('.ts')) {
       fileList.push(filePath);
     }
   }
