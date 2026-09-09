@@ -10,8 +10,23 @@ export default {
         <meta property="og:title" content={frontMatter.title || 'bro.js'} />
         <meta property="og:description" content={frontMatter.description || 'The zero-boilerplate Node.js backend framework.'} />
         <meta name="description" content={frontMatter.description || 'The zero-boilerplate Node.js backend framework.'} />
-        <meta property="og:image" content="https://brojs.yessindevs.me/og-image.png" />
-        <link rel="icon" type="image/png" href="/bro.js-124.png" />
+        <meta property="og:image" content="https://brojs.yessindevs.me/bro.js.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png" />
+        <meta property="og:site_name" content="bro.js" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              "name": "bro.js",
+              "url": "https://brojs.yessindevs.me"
+            })
+          }}
+        />
       </>
     );
   },
