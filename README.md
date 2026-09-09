@@ -25,12 +25,27 @@
 
 ## Table of Contents
 
+- [Getting Started](#getting-started)
 - [The Core Experience](#the-core-experience)
 - [Deep-Dive Features](#deep-dive-features)
 - [Architecture & Request Lifecycle](#architecture--request-lifecycle)
 - [Tech Stack Breakdown](#tech-stack-breakdown)
 - [CLI Reference](#cli-reference)
 - [Author & License](#author--license)
+
+---
+
+## Getting Started
+
+Bootstrapping a new `bro.js` project is incredibly simple. We recommend using our official scaffolding tool to set everything up instantly (with your choice of JavaScript or TypeScript):
+
+```bash
+npx create-bro-framework@latest my-api
+cd my-api
+npm run dev
+```
+
+That's it! Your zero-boilerplate backend is now running with hot-reloading enabled.
 
 ---
 

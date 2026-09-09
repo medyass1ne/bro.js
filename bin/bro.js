@@ -48,6 +48,13 @@ export default defineConfig({
     max: 100 // limit each IP to 100 requests per windowMs
   },
 
+  // WebSockets Setup
+  sockets: async (io, db) => {
+    io.on('connection', (socket) => {
+      console.log('Client connected:', socket.id);
+    });
+  },
+
   // Database Context Injection
   // This instance will be injected into every route's ctx.db (if defined)
   db: async () => {
@@ -67,13 +74,6 @@ export default defineConfig({
     // return mongoose.connection; 
     // --------------------------
     return null;
-  },
-  
-  // WebSockets Setup
-  sockets: async (io, db) => {
-    io.on('connection', (socket) => {
-      console.log('Client connected:', socket.id);
-    });
   }
 });
 `;
@@ -122,10 +122,10 @@ if (command === 'init') {
 
 if (['sdk', 'generate-client', 'client'].includes(command)) {
   generateSDK().then(() => {
-    console.log(`\n  ${colors.green}✨ bro-client.js generated successfully!${colors.reset}\n`);
+    console.log(`\n  ${colors.green} bro-client.js generated successfully!${colors.reset}\n`);
     process.exit(0);
   }).catch(err => {
-    console.error(`\n  ${colors.red}❌ Error generating SDK:${colors.reset}`, err.message);
+    console.error(`\n  ${colors.red} Error generating SDK:${colors.reset}`, err.message);
     process.exit(1);
   });
 }
@@ -175,7 +175,7 @@ async function bootstrap() {
   if (globalConfig.env) {
     const envResult = globalConfig.env.safeParse(process.env);
     if (!envResult.success) {
-      console.error(`\n  ${colors.red}❌ Environment Validation Failed${colors.reset}`);
+      console.error(`\n  ${colors.red} Environment Validation Failed${colors.reset}`);
       envResult.error.errors.forEach(err => {
         console.error(`  ${colors.dim}-${colors.reset} ${colors.bold}${err.path.join('.')}${colors.reset}: ${err.message}`);
       });

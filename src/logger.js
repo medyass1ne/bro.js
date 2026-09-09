@@ -25,17 +25,29 @@ export function formatMethod(method) {
 
 export function printBanner(port, durationMs) {
   const time = durationMs.toFixed(0);
-  const version = "1.0.0";
-  
+  const version = "2.0.1";
+  const innerWidth = 47;
+
+  const stripAnsi = (str) => str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
+
+  const formatLine = (content = "") => {
+    const visibleLength = stripAnsi(content).length;
+    const padding = Math.max(0, innerWidth - visibleLength);
+    return `${colors.green}│${colors.reset}${content}${" ".repeat(padding)}${colors.green}│${colors.reset}`;
+  };
+
+  const borderTop = `${colors.green}╭${"─".repeat(innerWidth)}╮${colors.reset}`;
+  const borderBottom = `${colors.green}╰${"─".repeat(innerWidth)}╯${colors.reset}`;
+
   console.log("");
-  console.log(`${colors.green}╭───────────────────────────────────────────────╮${colors.reset}`);
-  console.log(`${colors.green}│${colors.reset}                                               ${colors.green}│${colors.reset}`);
-  console.log(`${colors.green}│${colors.reset}   ${colors.bold}bro.js${colors.reset} v${version}                           ${colors.green}│${colors.reset}`);
-  console.log(`${colors.green}│${colors.reset}                                               ${colors.green}│${colors.reset}`);
-  console.log(`${colors.green}│${colors.reset}   ➜  ${colors.bold}Local:${colors.reset}   ${colors.cyan}http://localhost:${port}${colors.reset}         ${colors.green}│${colors.reset}`);
-  console.log(`${colors.green}│${colors.reset}   ➜  ${colors.bold}Ready in:${colors.reset} ${colors.yellow}${time}ms${colors.reset}                         ${colors.green}│${colors.reset}`);
-  console.log(`${colors.green}│${colors.reset}                                               ${colors.green}│${colors.reset}`);
-  console.log(`${colors.green}╰───────────────────────────────────────────────╯${colors.reset}`);
+  console.log(borderTop);
+  console.log(formatLine());
+  console.log(formatLine(`   ${colors.bold}bro.js${colors.reset} v${version}`));
+  console.log(formatLine());
+  console.log(formatLine(`   ➜  ${colors.bold}Local:${colors.reset}   ${colors.cyan}http://localhost:${port}${colors.reset}`));
+  console.log(formatLine(`   ➜  ${colors.bold}Ready in:${colors.reset} ${colors.yellow}${time}ms${colors.reset}`));
+  console.log(formatLine());
+  console.log(borderBottom);
   console.log("");
 }
 
