@@ -5,6 +5,7 @@
     <strong>The zero-boilerplate Node.js framework that actually has your back.</strong>
   </p>
   <p align="center">
+    <a href="https://www.npmjs.com/package/bro-framework"><img src="https://img.shields.io/npm/v/bro-framework.svg?style=flat-square&color=e11d48" alt="npm version"></a>
     <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License: MIT">
     <img src="https://img.shields.io/badge/Node.js-%3E%3D%2018-green.svg?style=flat-square" alt="Node.js: >= 18">
     <img src="https://img.shields.io/badge/Architecture-Pure%20ESM-orange.svg?style=flat-square" alt="Architecture: Pure ESM">
@@ -16,7 +17,6 @@
     <a href="https://brojs.yessindevs.me">Documentation Website</a>
   </p>
 </p>
-
 ---
 
 > "NestJS wants four decorators, three modules, and an existential crisis just to handle a GET request. Express makes you write the same 40 lines of CORS, JSON parsing, and auth middleware for every project. bro.js gives you file routing, auto-validation, JWT auth, WebSockets, and live docs out of the box. Be honest: you just want to return an object."
