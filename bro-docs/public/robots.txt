@@ -1,0 +1,36 @@
+User-agent: *
+Allow: /
+
+# Explicitly invite OpenAI bots (ChatGPT & Training)
+User-agent: GPTBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+
+# Explicitly invite Anthropic bots (Claude)
+User-agent: ClaudeBot
+Allow: /
+User-agent: Claude-Web
+Allow: /
+User-agent: anthropic-ai
+Allow: /
+
+# Explicitly invite Google bots (Gemini & Search)
+User-agent: Google-Extended
+Allow: /
+User-agent: Googlebot
+Allow: /
+
+# Explicitly invite AI Search Engines (Perplexity)
+User-agent: PerplexityBot
+Allow: /
+
+# Explicitly invite broad web scrapers used for AI datasets
+User-agent: CCBot
+Allow: /
+User-agent: Omgilibot
+Allow: /
+User-agent: Omgili
+Allow: /
+
+Sitemap: https://brojs.yessindevs.me/sitemap.xml
