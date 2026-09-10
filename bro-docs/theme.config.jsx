@@ -12,9 +12,9 @@ export default {
         <meta name="description" content={frontMatter.description || 'The zero-boilerplate Node.js backend framework.'} />
         <meta property="og:image" content="https://brojs.yessindevs.me/bro.js.png" />
         <meta name="twitter:card" content="summary_large_image" />
-        <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
-        <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png" />
+        <link rel="icon" type="image/png" sizes="48x48" href="https://brojs.yessindevs.me/favicon-48x48.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="https://brojs.yessindevs.me/icon-192.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="https://brojs.yessindevs.me/icon-180.png" />
         <meta property="og:site_name" content="bro.js" />
         <script
           type="application/ld+json"
