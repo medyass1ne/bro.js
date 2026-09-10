@@ -116,6 +116,21 @@ Don't spin up a separate worker server. Drop a JavaScript file anywhere in the `
 ### Zero-Boilerplate File Uploads
 Add `upload: true` to a route. `bro.js` automatically hooks into `multer`, parses the `multipart/form-data` payload in memory, and injects the files directly into `ctx.files`.
 
+### File-Based Locale
+Create a `locale/` folder with one translation file per locale, such as `locale/en.js` and `locale/fr.js`. Export a plain object from each file, then use `t()` in any route:
+
+```javascript
+// locale/fr.js
+export default { welcome: 'Bienvenue, {name} !' };
+
+// routes/welcome.get.js
+export default defineRoute({
+  handler: async ({ t }) => ({ message: t('welcome', { name: 'Sam' }) })
+});
+```
+
+The locale is selected from `Accept-Language`, and the generated SDK can set it with `setLocale('fr')`.
+
 ---
 
 ## Architecture & Request Lifecycle

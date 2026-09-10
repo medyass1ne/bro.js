@@ -10,6 +10,8 @@ export interface BroContext<Body = any, Params = any, Query = any> {
   db?: any;
   io?: any;
   files?: any[];
+  locale: string;
+  t: (key: string, values?: Record<string, unknown>) => string;
   error?: any;
 }
 
@@ -36,6 +38,10 @@ export interface BroConfig {
   server?: {
     port?: number;
     cors?: boolean | object;
+  };
+  locale?: {
+    directory?: string;
+    defaultLocale?: string;
   };
   auth?: {
     jwtSecret?: string;

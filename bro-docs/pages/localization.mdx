@@ -1,0 +1,89 @@
+---
+title: File-Based Locale
+description: Localize API responses with simple locale files and ctx.t.
+---
+
+# File-Based Locale
+
+Create a `locale/` folder beside `bro.config.js`. Each file exports a translation object, and its filename becomes the locale:
+
+```text
+locale/
+├── en.js
+├── fr.js
+└── ar.js
+```
+
+`locale/en.js`:
+
+```javascript
+export default {
+  welcome: 'Welcome, {name}!'
+};
+```
+
+`locale/fr.js`:
+
+```javascript
+export default {
+  welcome: 'Bienvenue, {name} !'
+};
+```
+
+The same structure also works with names such as `en-US.js`, `English.js`, or `Arabic.js`.
+
+## Configure the Default Locale
+
+```javascript
+import { defineConfig } from 'bro-framework';
+
+export default defineConfig({
+  locale: {
+    defaultLocale: 'en'
+  }
+});
+```
+
+The `locale/` directory and `en` default are automatic. The configuration is only needed when you want a different fallback locale or directory.
+
+## Use Translations in Routes
+
+`bro.js` selects the locale from the request's `Accept-Language` header and injects `t` into every route context:
+
+```javascript
+import { defineRoute } from 'bro-framework';
+
+export default defineRoute({
+  handler: async ({ t }) => ({
+    message: t('welcome', { name: 'Sam' })
+  })
+});
+```
+
+A request with `Accept-Language: fr` receives the French message. If that locale or key is missing, bro.js falls back to the configured default locale. If the key is missing from every file, the key itself is returned.
+
+## Nested Keys
+
+Translation objects can be organized by feature:
+
+```javascript
+export default {
+  auth: {
+    loggedIn: 'You are authenticated.'
+  }
+};
+```
+
+Use the dotted key in a route:
+
+```javascript
+const message = t('auth.loggedIn');
+```
+
+The generated SDK also supports the locale header:
+
+```javascript
+import { setLocale } from './bro-client.js';
+
+setLocale('fr');
+```

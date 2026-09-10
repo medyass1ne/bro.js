@@ -1,12 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import http from 'node:http';
+import path from 'node:path';
 import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import { apiReference } from '@scalar/express-api-reference';
 import { verifyJwt, signJwt, setJwtSecret } from './auth.js';
 import { loadRoutes } from './router.js';
+import { loadLocale } from './locale.js';
 
 const upload = multer();
 
@@ -20,6 +22,8 @@ const upload = multer();
 export async function createServer(globalConfig, routesDir, db) {
   const app = express();
   const server = http.createServer(app);
+  const localeDirectory = globalConfig.locale?.directory || path.join(process.cwd(), 'locale');
+  let locale = await loadLocale(localeDirectory, globalConfig.locale);
   
   const corsConfig = globalConfig.server?.cors !== undefined ? globalConfig.server.cors : true;
   
@@ -53,6 +57,7 @@ export async function createServer(globalConfig, routesDir, db) {
     
     middlewares.push(async (req, res) => {
       try {
+        const requestLocale = locale.resolveLocale(req);
         const ctx = {
           db,
           io,
@@ -60,6 +65,8 @@ export async function createServer(globalConfig, routesDir, db) {
           params: req.params,
           query: req.query,
           files: req.files || req.file,
+          locale: requestLocale,
+          t: (key, values) => locale.translate(requestLocale, key, values),
           user: null,
           jwt: { sign: signJwt },
           error: (status, message) => {
@@ -182,7 +189,12 @@ export async function createServer(globalConfig, routesDir, db) {
     return routes;
   };
 
+  const reloadLocale = async () => {
+    locale = await loadLocale(localeDirectory, globalConfig.locale);
+    return locale;
+  };
+
   const initialRoutes = await reload();
 
-  return { app, server, routes: initialRoutes, reload, io };
+  return { app, server, routes: initialRoutes, reload, reloadLocale, io };
 }
