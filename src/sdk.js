@@ -44,7 +44,10 @@ async function request(method, path, data) {
     options.body = JSON.stringify(data);
   } else if (data && ['GET', 'DELETE'].includes(method.toUpperCase())) {
     const params = new URLSearchParams(data);
-    path += '?' + params.toString();
+    const qs = params.toString();
+    if (qs) {
+      path += '?' + qs;
+    }
   }
 
   const url = CONFIG.baseURL + path;
@@ -115,10 +118,10 @@ function generateApiObject(endpoints) {
     
     for (const [key, val] of Object.entries(node)) {
       if (val._isParam) {
-        result += `${indent}${key}: (${key}) => ({\n`;
+        result += `${indent}"${key}": (${key}) => ({\n`;
         
         for (const [m, p] of Object.entries(val._methods)) {
-          const templatedPath = p.replace(/:([a-zA-Z0-9_]+)/g, '${$1}');
+          const templatedPath = p.replace(/:([a-zA-Z0-9_]+)/g, '${encodeURIComponent($1)}');
           result += `${indent}  ${m}: (data) => request('${m}', \`${templatedPath}\`, data),\n`;
         }
         
@@ -129,7 +132,7 @@ function generateApiObject(endpoints) {
         
         result += `${indent}}),\n`;
       } else {
-        result += `${indent}${key}: {\n`;
+        result += `${indent}"${key}": {\n`;
         for (const [m, p] of Object.entries(val._methods)) {
            result += `${indent}  ${m}: (data) => request('${m}', '${p}', data),\n`;
         }

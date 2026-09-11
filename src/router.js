@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
+import crypto from 'crypto';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
 /**
@@ -48,9 +49,10 @@ export function parseRouteFile(filePath, routesDir) {
   if (routePath === '/.') routePath = ''; 
   
   if (namePart !== 'index') {
-    const formattedName = namePart.replace(/\[(.*?)\]/g, ':$1');
-    routePath += `/${formattedName}`;
+    routePath += `/${namePart}`;
   }
+  
+  routePath = routePath.replace(/\[(.*?)\]/g, ':$1');
   
   if (routePath === '') routePath = '/';
 
@@ -68,6 +70,7 @@ export function parseRouteFile(filePath, routesDir) {
 export async function loadRoutes(app, routesDir, createHandler, openApiSpec) {
   const files = scanDir(routesDir);
   const loadedRoutes = [];
+  const routeModules = [];
   
   for (const file of files) {
     const routeInfo = parseRouteFile(file, routesDir);
@@ -77,68 +80,76 @@ export async function loadRoutes(app, routesDir, createHandler, openApiSpec) {
     
     if (typeof app[method] !== 'function') continue;
 
-    try {
-      const moduleUrl = pathToFileURL(file).href + '?update=' + Date.now();
-      const module = await import(moduleUrl);
-      const config = module.default;
+    const moduleUrl = pathToFileURL(file).href + '?update=' + crypto.randomUUID();
+    const module = await import(moduleUrl);
+    const config = module.default;
+    
+    if (!config) continue;
+    
+    routeModules.push({ file, routePath, method, config });
+  }
+  
+  for (const { file, routePath, method, config } of routeModules) {
+    const handler = createHandler(config);
+    app[method](routePath, handler);
+    
+    if (openApiSpec) {
+      const openApiPath = routePath.replace(/:([a-zA-Z0-9_]+)/g, '{$1}');
+      if (!openApiSpec.paths[openApiPath]) openApiSpec.paths[openApiPath] = {};
       
-      if (!config) continue;
+      const operation = {
+        summary: config.summary || `${method.toUpperCase()} ${routePath}`,
+        responses: { '200': { description: 'Successful response' } }
+      };
       
-      const handler = createHandler(config);
-      app[method](routePath, handler);
-      
-      if (openApiSpec) {
-        const openApiPath = routePath.replace(/:([a-zA-Z0-9_]+)/g, '{$1}');
-        if (!openApiSpec.paths[openApiPath]) openApiSpec.paths[openApiPath] = {};
-        
-        const operation = {
-          summary: config.summary || `${method.toUpperCase()} ${routePath}`,
-          responses: { '200': { description: 'Successful response' } }
-        };
-        
-        if (config.body) {
-          operation.requestBody = {
-            content: { 'application/json': { schema: zodToJsonSchema(config.body) } }
-          };
-        }
-        
-        if (config.params) {
-          operation.parameters = operation.parameters || [];
-          const pSchema = zodToJsonSchema(config.params);
-          if (pSchema.properties) {
-            for (const [key, schema] of Object.entries(pSchema.properties)) {
-              operation.parameters.push({ name: key, in: 'path', required: true, schema });
-            }
-          }
-        }
+      const bodySchema = config.schema?.body || config.body;
+      const paramsSchema = config.schema?.params || config.params;
+      const querySchema = config.schema?.query || config.query;
 
-        if (config.query) {
-          operation.parameters = operation.parameters || [];
-          const qSchema = zodToJsonSchema(config.query);
-          if (qSchema.properties) {
-            for (const [key, schema] of Object.entries(qSchema.properties)) {
-              operation.parameters.push({ 
-                name: key, 
-                in: 'query', 
-                required: qSchema.required?.includes(key), 
-                schema 
-              });
-            }
-          }
-        }
-        
-        openApiSpec.paths[openApiPath][method.toLowerCase()] = operation;
+      if (bodySchema) {
+        operation.requestBody = {
+          content: { 'application/json': { schema: zodToJsonSchema(bodySchema) } }
+        };
       }
       
-      loadedRoutes.push({
-        method: method.toUpperCase(),
-        path: routePath,
-        auth: !!config.auth
-      });
+      if (paramsSchema) {
+        operation.parameters = operation.parameters || [];
+        const pSchema = zodToJsonSchema(paramsSchema);
+        if (pSchema.properties) {
+          for (const [key, schema] of Object.entries(pSchema.properties)) {
+            operation.parameters.push({ name: key, in: 'path', required: true, schema });
+          }
+        }
+      }
+
+      if (querySchema) {
+        operation.parameters = operation.parameters || [];
+        const qSchema = zodToJsonSchema(querySchema);
+        if (qSchema.properties) {
+          for (const [key, schema] of Object.entries(qSchema.properties)) {
+            operation.parameters.push({ 
+              name: key, 
+              in: 'query', 
+              required: qSchema.required?.includes(key), 
+              schema 
+            });
+          }
+        }
+      }
       
-    } catch (err) {
-      console.error(`[bro.js] Failed to load route ${file}:`, err);
+      // Auto-inject security definition if auth is true
+      if (config.auth) {
+        operation.security = [{ bearerAuth: [] }];
+      }
+      
+      openApiSpec.paths[openApiPath][method.toLowerCase()] = operation;
     }
+    
+    loadedRoutes.push({
+      method: method.toUpperCase(),
+      path: routePath,
+      auth: !!config.auth
+    });
   }
   
   return loadedRoutes;

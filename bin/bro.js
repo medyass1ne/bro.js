@@ -182,6 +182,13 @@ async function bootstrap() {
       console.error("");
       process.exit(1);
     }
+    globalConfig.envData = envResult.data;
+  }
+
+  if (process.env.NODE_ENV === 'production' && ['dev_secret_please_change', 'bro_default_secret_key'].includes(globalConfig.jwtSecret)) {
+    console.error(`\n  ✗ CRITICAL SECURITY ERROR: You are running in production with a default JWT secret!`);
+    console.error(`  Please set auth.jwtSecret in bro.config.js or via JWT_SECRET environment variable.`);
+    process.exit(1);
   }
 
   if (!fs.existsSync(routesDir)) {

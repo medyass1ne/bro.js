@@ -1,31 +1,23 @@
 import jwt from 'jsonwebtoken';
 
-let secret = 'bro_default_secret_key';
-
-/**
- * Update the secret used for signing and verifying JWTs.
- * @param {string} newSecret 
- */
-export function setJwtSecret(newSecret) {
-  secret = newSecret;
-}
-
 /**
  * Signs a JWT payload.
  * @param {Object} payload - The data to embed in the token.
+ * @param {string} secret - The JWT secret key.
  * @param {jwt.SignOptions} [options] - jsonwebtoken sign options.
  * @returns {string} The signed JWT token.
  */
-export function signJwt(payload, options = { expiresIn: '1d' }) {
+export function signJwt(payload, secret, options = { expiresIn: '1d' }) {
   return jwt.sign(payload, secret, options);
 }
 
 /**
  * Verifies and decodes a JWT token.
  * @param {string} token - The JWT token to verify.
+ * @param {string} secret - The JWT secret key.
  * @returns {{ valid: boolean, payload?: any, error?: string }}
  */
-export function verifyJwt(token) {
+export function verifyJwt(token, secret) {
   try {
     const payload = jwt.verify(token, secret);
     return { valid: true, payload };

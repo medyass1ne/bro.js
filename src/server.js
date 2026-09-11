@@ -5,10 +5,8 @@ import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import { apiReference } from '@scalar/express-api-reference';
-import { verifyJwt, signJwt, setJwtSecret } from './auth.js';
+import { verifyJwt, signJwt } from './auth.js';
 import { loadRoutes } from './router.js';
-
-const upload = multer();
 
 /**
  * Creates and configures the core Express server.
@@ -23,7 +21,10 @@ export async function createServer(globalConfig, routesDir, db) {
   
   const corsConfig = globalConfig.server?.cors !== undefined ? globalConfig.server.cors : true;
   
-  app.use(cors(typeof corsConfig === 'object' ? corsConfig : {}));
+  if (corsConfig !== false) {
+    app.use(cors(typeof corsConfig === 'object' ? corsConfig : {}));
+  }
+  
   app.use(express.json());
   
   if (globalConfig.rateLimit) {
@@ -36,10 +37,6 @@ export async function createServer(globalConfig, routesDir, db) {
     await globalConfig.sockets(io, db);
   }
   
-  if (globalConfig.jwtSecret) {
-    setJwtSecret(globalConfig.jwtSecret);
-  }
-
   const createHandler = (routeConfig) => {
     const middlewares = [];
     
@@ -48,12 +45,23 @@ export async function createServer(globalConfig, routesDir, db) {
     }
     
     if (routeConfig.upload) {
-      middlewares.push(upload.any());
+      const routeMulterConfig = {
+        limits: globalConfig.upload?.limits || {
+          fileSize: 10 * 1024 * 1024,
+          files: 5,
+          fields: 20
+        }
+      };
+      if (typeof routeConfig.upload === 'object' && routeConfig.upload.limits) {
+        routeMulterConfig.limits = { ...routeMulterConfig.limits, ...routeConfig.upload.limits };
+      }
+      middlewares.push(multer(routeMulterConfig).any());
     }
     
     middlewares.push(async (req, res) => {
       try {
         const ctx = {
+          env: globalConfig.envData || process.env,
           db,
           io,
           body: req.body,
@@ -61,7 +69,7 @@ export async function createServer(globalConfig, routesDir, db) {
           query: req.query,
           files: req.files || req.file,
           user: null,
-          jwt: { sign: signJwt },
+          jwt: { sign: (payload, opts) => signJwt(payload, globalConfig.jwtSecret, opts || { expiresIn: globalConfig.auth?.expiresIn || '1d' }) },
           error: (status, message) => {
              const err = new Error(message);
              err.status = status;
@@ -76,7 +84,7 @@ export async function createServer(globalConfig, routesDir, db) {
           }
           
           const token = authHeader.split(' ')[1];
-          const authResult = verifyJwt(token);
+          const authResult = verifyJwt(token, globalConfig.jwtSecret);
           
           if (!authResult.valid) {
             return res.status(401).json({ error: 'Unauthorized', details: authResult.error });
@@ -143,6 +151,21 @@ export async function createServer(globalConfig, routesDir, db) {
   let openApiSpec = {
     openapi: '3.0.0',
     info: { title: 'bro.js API', version: '1.0.0' },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT'
+        }
+      },
+      responses: {
+        BadRequest: { description: 'Bad Request', content: { 'application/json': { schema: { type: 'object', properties: { error: { type: 'string' } } } } } },
+        Unauthorized: { description: 'Unauthorized', content: { 'application/json': { schema: { type: 'object', properties: { error: { type: 'string' } } } } } },
+        NotFound: { description: 'Not Found', content: { 'application/json': { schema: { type: 'object', properties: { error: { type: 'string' } } } } } },
+        ServerError: { description: 'Internal Server Error', content: { 'application/json': { schema: { type: 'object', properties: { error: { type: 'string' } } } } } }
+      }
+    },
     paths: {}
   };
 
@@ -172,6 +195,15 @@ export async function createServer(globalConfig, routesDir, db) {
   
   app.use((req, res, next) => {
     routeStack(req, res, next);
+  });
+
+  app.use((req, res) => {
+    res.status(404).json({ error: 'Not Found' });
+  });
+
+  app.use((err, req, res, next) => {
+    console.error(`[bro.js] Uncaught Error:`, err);
+    res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
   });
 
   const reload = async () => {
