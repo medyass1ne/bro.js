@@ -9,7 +9,7 @@ register();
 
 import { createServer } from '../src/server.js';
 import { colors, printBanner, printRoute, printHotReload } from '../src/logger.js';
-import { scanTasks } from '../src/tasks.js';
+import { scanTasks, stopTasks } from '../src/tasks.js';
 import { generateSDK } from '../src/sdk.js';
 import dotenv from 'dotenv';
 import chokidar from 'chokidar';
@@ -122,7 +122,7 @@ if (command === 'init') {
 
 if (['sdk', 'generate-client', 'client'].includes(command)) {
   generateSDK().then(() => {
-    console.log(`\n  ${colors.green} bro-client.js generated successfully!${colors.reset}\n`);
+    console.log(`\n  ${colors.green} bro-sdk.js generated successfully!${colors.reset}\n`);
     process.exit(0);
   }).catch(err => {
     console.error(`\n  ${colors.red} Error generating SDK:${colors.reset}`, err.message);
@@ -185,12 +185,6 @@ async function bootstrap() {
     globalConfig.envData = envResult.data;
   }
 
-  if (process.env.NODE_ENV === 'production' && ['dev_secret_please_change', 'bro_default_secret_key'].includes(globalConfig.jwtSecret)) {
-    console.error(`\n  ✗ CRITICAL SECURITY ERROR: You are running in production with a default JWT secret!`);
-    console.error(`  Please set auth.jwtSecret in bro.config.js or via JWT_SECRET environment variable.`);
-    process.exit(1);
-  }
-
   if (!fs.existsSync(routesDir)) {
     console.error(`✗ Error: 'routes' directory not found in ${cwd}`);
     console.error(`  Please create a 'routes/' folder and add your first route.`);
@@ -243,6 +237,19 @@ async function bootstrap() {
         }
       });
     }
+
+    const handleShutdown = async (signal) => {
+      console.log(`\n[bro.js] Received ${signal}. Shutting down gracefully...`);
+      stopTasks();
+      if (io) io.close();
+      server.close(() => {
+        console.log('[bro.js] HTTP server closed.');
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGINT', () => handleShutdown('SIGINT'));
+    process.on('SIGTERM', () => handleShutdown('SIGTERM'));
   });
 }
 

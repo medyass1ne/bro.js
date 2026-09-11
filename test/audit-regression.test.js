@@ -75,6 +75,9 @@ test('4. SDK generation output parses correctly', async () => {
   const check = spawnSync('node', ['--check', 'bro-sdk.js']);
   assert.strictEqual(check.status, 0, check.stderr?.toString());
   
+  assert.ok(sdkCode.includes('"my-hyphen-route": {'));
+  assert.ok(sdkCode.includes('users: {'));
+  
   // Cleanup
   fs.rmSync(routesDir, { recursive: true, force: true });
   fs.rmSync('bro-sdk.js', { force: true });
@@ -84,13 +87,55 @@ test('4. SDK generation output parses correctly', async () => {
   }
 });
 
-test('5. Production startup rejection on default JWT secret', () => {
-  // Instead of testing bin/bro.js execution, we can just assert the logic since it's a CLI wrapper.
-  // We'll test it by spawning bro.js
-  const result = spawnSync('node', ['bin/bro.js', 'start'], {
-    env: { ...process.env, NODE_ENV: 'production', JWT_SECRET: 'dev_secret_please_change' }
-  });
+test('5. Direct createServer() rejection on default JWT secret in production', async () => {
+  const originalEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
   
-  assert.strictEqual(result.status, 1);
-  assert.ok(result.stderr.toString().includes('CRITICAL SECURITY ERROR'));
+  try {
+    await createServer({ jwtSecret: 'dev_secret_please_change' }, path.join(process.cwd(), 'routes'), null);
+    assert.fail('Should have thrown an error');
+  } catch (err) {
+    assert.ok(err.message.includes('CRITICAL SECURITY ERROR'));
+  } finally {
+    process.env.NODE_ENV = originalEnv;
+  }
+});
+
+test('6. Runtime validation using config.schema.body rejects invalid data', async () => {
+  const routesDir = path.join(process.cwd(), 'test_routes_tmp3');
+  if (!fs.existsSync(routesDir)) fs.mkdirSync(routesDir, { recursive: true });
+  
+  fs.writeFileSync(path.join(routesDir, 'index.post.js'), `
+    import { z } from 'zod';
+    export default { 
+      schema: { body: z.object({ value: z.string().min(3) }) },
+      handler: () => ({ ok: true }) 
+    }
+  `);
+
+  const { app, server } = await createServer({}, routesDir, null);
+  
+  await new Promise((resolve) => server.listen(0, resolve));
+  const port = server.address().port;
+  
+  // Valid payload
+  const res1 = await fetch(`http://localhost:${port}/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value: 'yes' })
+  });
+  assert.strictEqual(res1.status, 200);
+
+  // Invalid payload
+  const res2 = await fetch(`http://localhost:${port}/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value: 'no' })
+  });
+  assert.strictEqual(res2.status, 400);
+  const data = await res2.json();
+  assert.ok(data.error.includes('Invalid Request Body'));
+  
+  server.close();
+  fs.rmSync(routesDir, { recursive: true, force: true });
 });

@@ -142,6 +142,22 @@ export async function loadRoutes(app, routesDir, createHandler, openApiSpec) {
         operation.security = [{ bearerAuth: [] }];
       }
       
+      if (config.upload) {
+        operation.requestBody = operation.requestBody || { content: {} };
+        operation.requestBody.content['multipart/form-data'] = {
+          schema: { type: 'object' }
+        };
+      }
+      
+      if (bodySchema || paramsSchema || querySchema) {
+        operation.responses['400'] = { $ref: '#/components/responses/BadRequest' };
+      }
+      if (config.auth) {
+        operation.responses['401'] = { $ref: '#/components/responses/Unauthorized' };
+      }
+      operation.responses['404'] = { $ref: '#/components/responses/NotFound' };
+      operation.responses['500'] = { $ref: '#/components/responses/ServerError' };
+      
       openApiSpec.paths[openApiPath][method.toLowerCase()] = operation;
     }
     

@@ -116,9 +116,13 @@ function generateApiObject(endpoints) {
   function renderTree(node, indent = '  ') {
     let result = '';
     
+    const isValidIdentifier = (key) => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key);
+    
     for (const [key, val] of Object.entries(node)) {
+      const formattedKey = isValidIdentifier(key) ? key : `"${key}"`;
+      
       if (val._isParam) {
-        result += `${indent}"${key}": (${key}) => ({\n`;
+        result += `${indent}${formattedKey}: (${key}) => ({\n`;
         
         for (const [m, p] of Object.entries(val._methods)) {
           const templatedPath = p.replace(/:([a-zA-Z0-9_]+)/g, '${encodeURIComponent($1)}');
@@ -132,7 +136,7 @@ function generateApiObject(endpoints) {
         
         result += `${indent}}),\n`;
       } else {
-        result += `${indent}"${key}": {\n`;
+        result += `${indent}${formattedKey}: {\n`;
         for (const [m, p] of Object.entries(val._methods)) {
            result += `${indent}  ${m}: (data) => request('${m}', '${p}', data),\n`;
         }

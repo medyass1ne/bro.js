@@ -17,6 +17,7 @@
     <a href="https://brojs.yessindevs.me">Documentation Website</a>
   </p>
 </p>
+
 ---
 
 > "NestJS wants four decorators, three modules, and an existential crisis just to handle a GET request. Express makes you write the same 40 lines of CORS, JSON parsing, and auth middleware for every project. bro.js gives you file routing, auto-validation, JWT auth, WebSockets, and live docs out of the box. Be honest: you just want to return an object."

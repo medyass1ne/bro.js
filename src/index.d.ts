@@ -3,6 +3,8 @@ import { z, ZodTypeAny } from 'zod';
 type InferZod<T> = T extends ZodTypeAny ? z.infer<T> : any;
 
 export interface BroContext<Body = any, Params = any, Query = any> {
+  env?: any;
+  jwt?: { sign: (payload: any, options?: any) => string };
   body: InferZod<Body>;
   params: InferZod<Params>;
   query: InferZod<Query>;
@@ -15,7 +17,8 @@ export interface BroContext<Body = any, Params = any, Query = any> {
 
 export interface RouteConfig<Body = any, Params = any, Query = any> {
   auth?: boolean;
-  upload?: boolean;
+  upload?: boolean | { limits?: any, fields?: { name: string, maxCount?: number }[], single?: string, array?: string, fileFilter?: any, storage?: any };
+  schema?: { body?: Body; params?: Params; query?: Query; };
   body?: Body;
   params?: Params;
   query?: Query;
@@ -45,6 +48,14 @@ export interface BroConfig {
   rateLimit?: {
     windowMs: number;
     max: number;
+  };
+  upload?: {
+    limits?: {
+      fileSize?: number;
+      files?: number;
+      fields?: number;
+      [key: string]: any;
+    };
   };
   db?: () => Promise<any> | any;
   sockets?: (io: any, db: any) => Promise<void> | void;

@@ -16,6 +16,10 @@ import { loadRoutes } from './router.js';
  * @returns {Promise<{ app: import('express').Application, server: http.Server, routes: Array, reload: Function, io: import('socket.io').Server }>}
  */
 export async function createServer(globalConfig, routesDir, db) {
+  if (process.env.NODE_ENV === 'production' && ['dev_secret_please_change', 'bro_default_secret_key'].includes(globalConfig.jwtSecret)) {
+    throw new Error('CRITICAL SECURITY ERROR: You are running in production with a default JWT secret! Please set auth.jwtSecret in bro.config.js or via JWT_SECRET environment variable.');
+  }
+
   const app = express();
   const server = http.createServer(app);
   
@@ -39,6 +43,9 @@ export async function createServer(globalConfig, routesDir, db) {
   
   const createHandler = (routeConfig) => {
     const middlewares = [];
+    const bodySchema = routeConfig.schema?.body || routeConfig.body;
+    const paramsSchema = routeConfig.schema?.params || routeConfig.params;
+    const querySchema = routeConfig.schema?.query || routeConfig.query;
     
     if (routeConfig.rateLimit) {
       middlewares.push(rateLimit(routeConfig.rateLimit));
@@ -52,10 +59,25 @@ export async function createServer(globalConfig, routesDir, db) {
           fields: 20
         }
       };
-      if (typeof routeConfig.upload === 'object' && routeConfig.upload.limits) {
-        routeMulterConfig.limits = { ...routeMulterConfig.limits, ...routeConfig.upload.limits };
+      if (typeof routeConfig.upload === 'object') {
+        if (routeConfig.upload.limits) {
+          routeMulterConfig.limits = { ...routeMulterConfig.limits, ...routeConfig.upload.limits };
+        }
+        if (routeConfig.upload.fileFilter) routeMulterConfig.fileFilter = routeConfig.upload.fileFilter;
+        if (routeConfig.upload.storage) routeMulterConfig.storage = routeConfig.upload.storage;
       }
-      middlewares.push(multer(routeMulterConfig).any());
+      
+      const uploadParser = multer(routeMulterConfig);
+      
+      if (typeof routeConfig.upload === 'object' && routeConfig.upload.fields) {
+        middlewares.push(uploadParser.fields(routeConfig.upload.fields));
+      } else if (typeof routeConfig.upload === 'object' && routeConfig.upload.single) {
+        middlewares.push(uploadParser.single(routeConfig.upload.single));
+      } else if (typeof routeConfig.upload === 'object' && routeConfig.upload.array) {
+        middlewares.push(uploadParser.array(routeConfig.upload.array));
+      } else {
+        middlewares.push(uploadParser.any());
+      }
     }
     
     middlewares.push(async (req, res) => {
@@ -93,24 +115,24 @@ export async function createServer(globalConfig, routesDir, db) {
           ctx.user = authResult.payload;
         }
 
-        if (routeConfig.params) {
-          const result = routeConfig.params.safeParse(req.params);
+        if (paramsSchema) {
+          const result = paramsSchema.safeParse(req.params);
           if (!result.success) {
             return res.status(400).json({ error: 'Invalid URL Parameters', details: result.error.flatten() });
           }
           ctx.params = result.data;
         }
         
-        if (routeConfig.body) {
-          const result = routeConfig.body.safeParse(req.body);
+        if (bodySchema) {
+          const result = bodySchema.safeParse(req.body);
           if (!result.success) {
             return res.status(400).json({ error: 'Invalid Request Body', details: result.error.flatten() });
           }
           ctx.body = result.data;
         }
 
-        if (routeConfig.query) {
-           const result = routeConfig.query.safeParse(req.query);
+        if (querySchema) {
+           const result = querySchema.safeParse(req.query);
            if (!result.success) {
              return res.status(400).json({ error: 'Invalid Query Parameters', details: result.error.flatten() });
            }
@@ -208,8 +230,9 @@ export async function createServer(globalConfig, routesDir, db) {
 
   const reload = async () => {
     const newRouter = express.Router();
-    openApiSpec.paths = {};
-    const routes = await loadRoutes(newRouter, routesDir, createHandler, openApiSpec);
+    const tempSpec = { paths: {} };
+    const routes = await loadRoutes(newRouter, routesDir, createHandler, tempSpec);
+    openApiSpec.paths = tempSpec.paths;
     routeStack = newRouter;
     return routes;
   };
