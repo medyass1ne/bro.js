@@ -20,10 +20,10 @@ export interface BroContext<Body = any, Params = any, Query = any> {
 export interface RouteConfig<Body = any, Params = any, Query = any> {
   auth?: boolean;
   upload?: boolean | { limits?: any, fields?: { name: string, maxCount?: number }[], single?: string, array?: string, fileFilter?: any, storage?: any };
-  schema?: { body?: Body; params?: Params; query?: Query; };
   body?: Body;
   params?: Params;
   query?: Query;
+  response?: ZodTypeAny;
   rateLimit?: {
     windowMs: number;
     max: number;
@@ -35,6 +35,13 @@ export interface RouteConfig<Body = any, Params = any, Query = any> {
 export function defineRoute<Body = any, Params = any, Query = any>(
   config: RouteConfig<Body, Params, Query>
 ): RouteConfig<Body, Params, Query>;
+
+export function loadLocale(directory: string, options?: { defaultLocale?: string }): Promise<{
+  locales: string[];
+  defaultLocale: string;
+  resolveLocale: (request: any) => string;
+  translate: (locale: string, key: string, values?: Record<string, unknown>) => string;
+}>;
 
 export interface BroConfig {
   env?: ZodTypeAny;
@@ -65,6 +72,7 @@ export interface BroConfig {
   };
   db?: () => Promise<any> | any;
   sockets?: (io: any, db: any) => Promise<void> | void;
+  onShutdown?: (db: any) => Promise<void> | void;
 }
 
 export function defineConfig(config: BroConfig): BroConfig;

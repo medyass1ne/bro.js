@@ -56,15 +56,13 @@ Every route file MUST export default a configuration object using `defineRoute` 
 import { defineRoute, z } from 'bro-framework';
 
 export default defineRoute({
-  schema: {
-    query: z.object({
-      page: z.coerce.number().min(1).default(1),
-      limit: z.coerce.number().min(1).max(100).default(10)
-    })
-  },
-  handler: async (ctx) => {
+  query: z.object({
+    page: z.coerce.number().min(1).default(1),
+    limit: z.coerce.number().min(1).max(100).default(10)
+  }),
+  handler: async ({ query }) => {
     // Return data directly. Responds with 200 OK.
-    return { data: [], page: ctx.query.page };
+    return { data: [], page: query.page };
   }
 });
 ```
@@ -74,14 +72,12 @@ export default defineRoute({
 import { defineRoute, z } from 'bro-framework';
 
 export default defineRoute({
-  schema: {
-    body: z.object({
-      email: z.string().email(),
-      password: z.string().min(8)
-    })
-  },
-  handler: async (ctx) => {
-    return { message: "Created successfully", email: ctx.body.email };
+  body: z.object({
+    email: z.string().email(),
+    password: z.string().min(8)
+  }),
+  handler: async ({ body }) => {
+    return { message: "Created successfully", email: body.email };
   }
 });
 ```
@@ -92,16 +88,14 @@ export default defineRoute({
 import { defineRoute, z } from 'bro-framework';
 
 export default defineRoute({
-  schema: {
-    params: z.object({
-      id: z.string().uuid()
-    }),
-    body: z.object({
-      name: z.string()
-    })
-  },
-  handler: async (ctx) => {
-    return { id: ctx.params.id, name: ctx.body.name };
+  params: z.object({
+    id: z.string().uuid()
+  }),
+  body: z.object({
+    name: z.string()
+  }),
+  handler: async ({ params, body }) => {
+    return { id: params.id, name: body.name };
   }
 });
 ```
@@ -112,13 +106,11 @@ export default defineRoute({
 import { defineRoute, z } from 'bro-framework';
 
 export default defineRoute({
-  schema: {
-    params: z.object({
-      id: z.string().uuid()
-    })
-  },
-  handler: async (ctx) => {
-    return { deleted: true, id: ctx.params.id };
+  params: z.object({
+    id: z.string().uuid()
+  }),
+  handler: async ({ params }) => {
+    return { deleted: true, id: params.id };
   }
 });
 ```
@@ -128,12 +120,10 @@ export default defineRoute({
 import { defineRoute, z } from 'bro-framework';
 
 export default defineRoute({
-  schema: {
-    body: z.object({
-      status: z.enum(['active', 'inactive']).optional()
-    })
-  },
-  handler: async (ctx) => {
+  body: z.object({
+    status: z.enum(['active', 'inactive']).optional()
+  }),
+  handler: async ({ body }) => {
     return { updated: true };
   }
 });
@@ -144,8 +134,8 @@ To protect a route, add `auth: true`. The framework will demand an `Authorizatio
 ```typescript
 export default defineRoute({
   auth: true,
-  handler: async (ctx) => {
-    return { userId: ctx.user.id };
+  handler: async ({ user }) => {
+    return { userId: user.id };
   }
 });
 ```
@@ -173,8 +163,8 @@ export default defineRoute({
     single: 'avatar',
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB
   },
-  handler: async (ctx) => {
-    return { filename: ctx.file.originalname, size: ctx.file.size };
+  handler: async ({ file }) => {
+    return { filename: file.originalname, size: file.size };
   }
 });
 ```
@@ -185,8 +175,8 @@ export default defineRoute({
   upload: {
     fields: [{ name: 'avatar', maxCount: 1 }, { name: 'gallery', maxCount: 4 }]
   },
-  handler: async (ctx) => {
-    return { avatar: ctx.files['avatar'][0], gallery: ctx.files['gallery'] };
+  handler: async ({ files }) => {
+    return { avatar: files['avatar'][0], gallery: files['gallery'] };
   }
 });
 ```
@@ -285,8 +275,8 @@ export default defineConfig({
 - **Context Availability:** `ctx.io` is injected into every route handler and background task.
 - **Emitting Events from Routes:** 
   ```typescript
-  handler: async (ctx) => {
-    ctx.io.emit('notification', { message: 'A new user signed up!' });
+  handler: async ({ io }) => {
+    io.emit('notification', { message: 'A new user signed up!' });
     return { success: true };
   }
   ```
@@ -368,17 +358,17 @@ Zod validation failures (Body, Params, Query) are automatically intercepted and 
 If you need to throw a specific error inside a handler, use the `ctx.error(status, message)` helper.
 
 ```typescript
-handler: async (ctx) => {
-  const item = await ctx.db.find(ctx.params.id);
+handler: async ({ db, params, user, error }) => {
+  const item = await db.find(params.id);
   
   if (!item) {
     // Immediately throws a 404 response
-    ctx.error(404, 'Item not found in database');
+    error(404, 'Item not found in database');
   }
   
-  if (item.ownerId !== ctx.user.id) {
+  if (item.ownerId !== user.id) {
     // Immediately throws a 403 Forbidden response
-    ctx.error(403, 'You do not have permission to access this item');
+    error(403, 'You do not have permission to access this item');
   }
 
   return item;

@@ -25,9 +25,9 @@ This instantly maps to `GET /hello`.
 ## Dynamic Routes
 
 Need path parameters? Just use brackets!
-Create `routes/users/[id].get.js`:
+Create `routes/users/[id].get.ts`:
 
-```javascript
+```typescript
 import { defineRoute, z } from 'bro-framework';
 
 export default defineRoute({
@@ -38,3 +38,48 @@ export default defineRoute({
 });
 ```
 This maps to `GET /users/:id` and strictly validates that `id` is a string!
+
+### Bracket Naming Rules
+Dynamic bracket parameters MUST be valid JavaScript identifiers (matching `^[a-zA-Z_$][a-zA-Z0-9_$]*$`). Malformed names (like `[user-id]`) or invalid HTTP methods (like `.psot.ts`) will fail immediately at boot.
+
+## Nested Dynamic Routes
+
+You can nest dynamic routes endlessly.
+Create `routes/orgs/[orgId]/projects/[projectId].get.ts`:
+
+```typescript
+import { defineRoute, z } from 'bro-framework';
+
+export default defineRoute({
+  params: z.object({
+    orgId: z.string(),
+    projectId: z.string()
+  }),
+  handler: async ({ params }) => {
+    return { orgId: params.orgId, projectId: params.projectId };
+  }
+});
+```
+This maps to `GET /orgs/:orgId/projects/:projectId`.
+
+## SDK Collision Guard
+
+When defining routes, you cannot create overlapping static and dynamic segments at the same tree depth in the same directory.
+For example, having both `routes/users/me.get.js` (static) and `routes/users/[id].get.js` (dynamic) will throw an **SDK Collision** error to protect the auto-generated client logic. Keep your static and dynamic endpoints neatly separated!
+
+## OpenAPI Success Schemas
+
+If you want your successful responses to be strictly typed in the generated OpenAPI documentation, you can export a `response` Zod schema. This is strictly **opt-in**. If you don't provide one, your handler's return value will still be seamlessly served as a `200 OK` JSON response, maintaining our zero-boilerplate philosophy.
+
+```typescript
+import { defineRoute, z } from 'bro-framework';
+
+export default defineRoute({
+  response: z.object({
+    userId: z.string()
+  }),
+  handler: async () => {
+    return { userId: "123" };
+  }
+});
+```

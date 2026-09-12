@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
+import crypto from 'node:crypto';
 
 const LOCALE_EXTENSIONS = new Set(['.js', '.mjs', '.ts']);
 
@@ -9,7 +10,7 @@ function localeFromFilename(fileName) {
 }
 
 function normalizeLocale(locale) {
-	const normalized = String(locale || '').trim().replace('_', '-').toLowerCase();
+	const normalized = String(locale || '').trim().replaceAll('_', '-').toLowerCase();
 	const aliases = {
 		english: 'en',
 		arabic: 'ar',
@@ -50,8 +51,18 @@ function interpolate(message, values) {
 function parseAcceptLanguage(header) {
 	return String(header || '')
 		.split(',')
-		.map(value => value.split(';')[0].trim())
-		.filter(Boolean);
+		.map(value => {
+			const [tag, qVal] = value.split(';').map(s => s.trim());
+			let q = 1;
+			if (qVal && qVal.startsWith('q=')) {
+				const parsedQ = parseFloat(qVal.slice(2));
+				if (!isNaN(parsedQ)) q = parsedQ;
+			}
+			return { tag, q };
+		})
+		.filter(item => item.tag && item.q > 0)
+		.sort((a, b) => b.q - a.q)
+		.map(item => item.tag);
 }
 
 /**
@@ -62,12 +73,15 @@ function parseAcceptLanguage(header) {
  */
 export async function loadLocale(directory, options = {}) {
 	const files = fs.existsSync(directory)
-		? fs.readdirSync(directory).filter(file => LOCALE_EXTENSIONS.has(path.extname(file)))
+		? fs.readdirSync(directory).filter(file => {
+			const fullPath = path.join(directory, file);
+			return fs.statSync(fullPath).isFile() && LOCALE_EXTENSIONS.has(path.extname(file));
+		})
 		: [];
 
 	const messages = {};
 	for (const file of files) {
-		const module = await import(`${pathToFileURL(path.join(directory, file)).href}?update=${Date.now()}`);
+		const module = await import(`${pathToFileURL(path.join(directory, file)).href}?update=${crypto.randomUUID()}`);
 		const catalog = module.default || module.messages || module;
 		if (catalog && typeof catalog === 'object') {
 			messages[localeFromFilename(file)] = catalog;
@@ -83,7 +97,11 @@ export async function loadLocale(directory, options = {}) {
 
 	function resolveLocale(request) {
 		const requestedLocales = parseAcceptLanguage(request?.headers?.['accept-language']);
-		return findLocale(locales, requestedLocales[0], defaultLocale);
+		for (const requested of requestedLocales) {
+			const match = findLocale(locales, requested, null);
+			if (match) return match;
+		}
+		return defaultLocale;
 	}
 
 	function translate(locale, key, values = {}) {

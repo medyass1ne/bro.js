@@ -116,10 +116,15 @@ export async function loadRoutes(app, routesDir, createHandler, openApiSpec) {
         summary: config.summary || `${method.toUpperCase()} ${routePath}`,
         responses: { '200': { description: 'Successful response' } }
       };
-      
-      const bodySchema = config.schema?.body || config.body;
-      const paramsSchema = config.schema?.params || config.params;
-      const querySchema = config.schema?.query || config.query;
+
+      if (config.response) {
+        operation.responses['200'].content = {
+          'application/json': { schema: zodToJsonSchema(config.response) }
+        };
+      }
+      const bodySchema = config.body;
+      const paramsSchema = config.params;
+      const querySchema = config.query;
 
       if (bodySchema) {
         operation.requestBody = {

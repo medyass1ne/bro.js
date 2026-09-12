@@ -97,7 +97,7 @@ export default defineRoute({
 Create a `.js` file in the `routes/` directory, and it automatically becomes an endpoint. We use Next.js-style bracket syntax for dynamic parameters. A file named `routes/users/[id].get.js` translates natively to a `GET /users/:id` Express route under the hood.
 
 ### Bouncer-Grade Validation
-Powered by Zod. Attach a schema to `body`, `query`, or `params` in your route definition. If the client sends malformed data, `bro.js` automatically rejects the request with a structured `400 Bad Request` JSON payload *before* your handler ever executes. You never have to manually validate inputs again.
+Powered by Zod. Attach a schema to `body`, `query`, or `params` directly in your route definition. If the client sends malformed data, `bro.js` automatically rejects the request with a structured `400 Bad Request` JSON payload *before* your handler ever executes. You never have to manually validate inputs again. You can also define a `response` schema to strongly type your OpenAPI documentation (strictly opt-in; arbitrary 200s work out of the box).
 
 ### Zero-Config JWTs
 Add `auth: true` to your route config. `bro.js` will intercept the request, extract the `Authorization: Bearer <token>` header, verify the signature using your `jwtSecret`, and inject the decoded payload directly into `ctx.user`.
@@ -115,7 +115,7 @@ Tired of writing frontend `fetch` wrappers? Run `bro sdk`. The CLI will parse yo
 Don't spin up a separate worker server. Drop a JavaScript file anywhere in the `tasks/` folder, export a cron string (e.g., `"0 0 * * *"`), and an async handler. `bro.js` natively schedules it as a background worker with full access to your injected database and WebSocket contexts.
 
 ### Zero-Boilerplate File Uploads
-Add `upload: true` to a route. `bro.js` automatically hooks into `multer`, parses the `multipart/form-data` payload in memory, and injects the files directly into `ctx.files`.
+Add `upload: true` to a route. `bro.js` automatically hooks into `multer`, parses the `multipart/form-data` payload in memory, and injects the files directly into `ctx.files`. It also natively supports granular file limits, restricting max sizes, parts, and fielding counts instantly to protect your RAM. (Note: Use the `storage` configuration for heavy production disk writing to prevent memory exhaustion).
 
 ### File-Based Locale
 Create a `locale/` folder with one translation file per locale, such as `locale/en.js` and `locale/fr.js`. Export a plain object from each file, then use `t()` in any route:
@@ -130,7 +130,7 @@ export default defineRoute({
 });
 ```
 
-The locale is selected from `Accept-Language`, and the generated SDK can set it with `setLocale('fr')`.
+The locale is negotiated dynamically using RFC 9110 `Accept-Language` headers, supporting full region fallback and custom defaults, and the generated SDK can securely set it via `setLocale('fr')`.
 
 ---
 
@@ -193,9 +193,9 @@ The locale is selected from `Accept-Language`, and the generated SDK can set it 
 | Command | Description |
 | :--- | :--- |
 | `bro dev` | Development server featuring instant boot, visual CLI banner, and `chokidar`-powered hot module remapping. |
-| `bro start` &nbsp; | Production runner locked down for security. Zero watcher overhead, suppressed internal logs, and isolated API docs. |
+| `bro start` &nbsp; | Production runner locked down for security. Features Graceful Shutdown APIs (with `onShutdown` DB teardown), suppressed internal logs, and isolated API docs. |
 | `bro init` | Automated workspace scaffolder. Generates configuration files and forcefully ensures your `package.json` respects `"type": "module"`. |
-| `bro sdk` | Route parser and browser client compiler. Generates your frontend SDK in one hit. |
+| `bro sdk` | Route parser and browser client compiler. Generates your typed `bro-sdk.js` frontend SDK in one hit. |
 
 ---
 

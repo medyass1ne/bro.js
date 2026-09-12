@@ -48,7 +48,7 @@ The `locale/` directory and `en` default are automatic. The configuration is onl
 
 ## Use Translations in Routes
 
-`bro.js` selects the locale from the request's `Accept-Language` header and injects `t` into every route context:
+`bro.js` selects the locale from the request's `Accept-Language` header and injects the `t` function into every route context:
 
 ```javascript
 import { defineRoute } from 'bro-framework';
@@ -60,7 +60,14 @@ export default defineRoute({
 });
 ```
 
-A request with `Accept-Language: fr` receives the French message. If that locale or key is missing, bro.js falls back to the configured default locale. If the key is missing from every file, the key itself is returned.
+### Advanced Header Negotiation
+The locale engine natively implements RFC 9110 quality values for HTTP content negotiation.
+- It parses headers like `Accept-Language: fr-CH, fr;q=0.9, en;q=0.8, de;q=0.7, *;q=0.5`.
+- Locales explicitly marked with `q=0` are strictly rejected.
+- Valid requests are sorted in descending order of quality.
+- For each requested locale, it attempts an **exact match** (e.g. `fr-CH`). If missing, it automatically attempts a **language-only fallback** (e.g. `fr`). 
+- If the entire list is exhausted with zero matches, it falls back to your configured `defaultLocale`.
+- If a specific translation key is missing from a locale file, it falls back to the default locale file. If missing everywhere, the key string itself is returned.
 
 ## Nested Keys
 
@@ -83,7 +90,7 @@ const message = t('auth.loggedIn');
 The generated SDK also supports the locale header:
 
 ```javascript
-import { setLocale } from './bro-client.js';
+import { setLocale } from './bro-sdk.js';
 
 setLocale('fr');
 ```

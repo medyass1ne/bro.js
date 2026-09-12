@@ -2,6 +2,7 @@
   "index": "Introduction",
   "getting-started": "Getting Started",
   "routing": "File-Based Routing",
+  "context": "Execution Context",
   "localization": "File-Based Locale",
   "validation": "Zod Validation",
   "auth": "Authentication & JWT",

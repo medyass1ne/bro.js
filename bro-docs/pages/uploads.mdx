@@ -15,7 +15,7 @@ Simply add `upload: true` to your route configuration. The framework will automa
 import { defineRoute } from 'bro-framework';
 
 export default defineRoute({
-  upload: true, // That's literally it.
+  upload: true, // That's literally it for any-file uploads.
   handler: async ({ files, body }) => {
     // files is an array of uploaded file objects (buffered in memory)
     const uploadedImages = files.filter(f => f.mimetype.startsWith('image/'));
@@ -27,3 +27,61 @@ export default defineRoute({
   }
 });
 ```
+
+## Granular Upload Configurations
+
+For production systems, you should be extremely specific about what files you accept. `bro.js` supports granular object configurations:
+
+### Single File Uploads
+
+When expecting exactly one file under a specific field name, use `upload: { single: 'fieldName' }`. The file is injected as `ctx.file` (singular).
+
+```javascript
+export default defineRoute({
+  upload: {
+    single: 'avatar',
+    limits: { fileSize: 5 * 1024 * 1024 } // Override default 10MB limit to 5MB
+  },
+  handler: async ({ file }) => {
+    return { filename: file.originalname, size: file.size };
+  }
+});
+```
+
+### Multiple Fields & Custom Limits
+
+You can restrict uploads to specific fields and counts using `upload: { fields: [] }`. The files are injected as `ctx.files`, which acts as a dictionary keyed by field name.
+
+```javascript
+export default defineRoute({
+  upload: {
+    fields: [
+      { name: 'avatar', maxCount: 1 },
+      { name: 'gallery', maxCount: 4 }
+    ],
+    // You can also provide custom multer storage or fileFilter
+    // storage: customStorageEngine,
+    // fileFilter: customFileFilter
+  },
+  handler: async ({ files }) => {
+    return {
+      avatar: files['avatar']?.[0]?.originalname,
+      galleryCount: files['gallery']?.length || 0
+    };
+  }
+});
+```
+
+## Built-In Safety Limits
+
+> [!TIP]
+> **Production Best Practices**
+> By default, `multer` buffers files entirely in RAM. For heavy traffic or large file uploads, it is strongly advised to configure disk storage via the `storage` configuration option. Additionally, remember to set proxy-level limits (like `client_max_body_size` in Nginx) to drop oversized payloads before they even reach Node.js.
+
+By default, `bro.js` protects your server with strict resource limits. These apply globally unless overridden in `bro.config.js` or directly at the route level:
+
+- `fileSize`: 10 MB (10 * 1024 * 1024 bytes)
+- `files`: 5 (Max number of files per request)
+- `fields`: 20 (Max number of non-file fields)
+- `parts`: 25 (Max multipart fields + files)
+- `fieldSize`: 1 MB (Max size for non-file text fields)

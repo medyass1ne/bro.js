@@ -1,0 +1,48 @@
+---
+title: Execution Context
+description: Understand the powerful ctx object injected into every route handler.
+---
+
+# Execution Context (`ctx`)
+
+In `bro.js`, you NEVER use standard Express `(req, res, next)` signatures. Instead, every route handler receives a single, unified `ctx` object that contains all validated data, system instances, and helpers.
+
+## The `ctx` Reference Table
+
+| Property | Description |
+| :--- | :--- |
+| `ctx.body` | The parsed and Zod-validated request body payload. Contains deeply typed data. |
+| `ctx.query` | The parsed and Zod-validated URL query string parameters. |
+| `ctx.params` | The parsed and Zod-validated dynamic path parameters (e.g. `[id]`). |
+| `ctx.user` | If `auth: true` is set, contains the decoded JSON payload of the JWT. `null` otherwise. |
+| `ctx.db` | The initialized database connection injected from `bro.config.js`. Available globally. |
+| `ctx.io` | The live Socket.io server instance. Use this to `ctx.io.emit()` realtime events. |
+| `ctx.files` | An array or dictionary of uploaded files (if `upload` is configured for multiple files). |
+| `ctx.file` | A single uploaded file (if `upload.single` is configured). |
+| `ctx.env` | Validated environment variables (if `env` schema is provided in global config). Fallbacks to raw `process.env`. |
+| `ctx.locale` | The resolved client language tag based on the `Accept-Language` header (e.g. `en`, `fr`). |
+| `ctx.t(key, values)` | Translation helper. Uses `ctx.locale` to resolve keys from your `locale/` files, supporting token interpolation (e.g. `ctx.t('welcome', { name: 'Alex' })`). |
+| `ctx.jwt.sign(payload, opts?)` | Utility function to dynamically generate signed JWT tokens using the global secret and default expiration. |
+| `ctx.error(status, msg)` | Throw a custom error with an exact HTTP status code. Example: `ctx.error(403, "Forbidden")`. |
+
+## Throwing Errors Properly
+
+Instead of manually crafting HTTP responses, simply throw errors and let the framework handle the serialization:
+
+```javascript
+import { defineRoute, z } from 'bro-framework';
+
+export default defineRoute({
+  params: z.object({ id: z.string() }),
+  handler: async ({ db, params, error }) => {
+    const item = await db.find(params.id);
+    
+    if (!item) {
+      // Immediately throws a 404 response
+      error(404, 'Item not found in database');
+    }
+    
+    return item;
+  }
+});
+```

@@ -45,12 +45,14 @@ export async function createServer(globalConfig, routesDir, db) {
   if (globalConfig.sockets) {
     await globalConfig.sockets(io, db);
   }
-  
   const createHandler = (routeConfig) => {
     const middlewares = [];
-    const bodySchema = routeConfig.schema?.body || routeConfig.body;
-    const paramsSchema = routeConfig.schema?.params || routeConfig.params;
-    const querySchema = routeConfig.schema?.query || routeConfig.query;
+    if (routeConfig.schema) {
+      throw new Error("Nested 'schema' object is no longer supported in bro.js v2.3.0+. Please use flat, top-level properties (body, query, params) instead.");
+    }
+    const bodySchema = routeConfig.body;
+    const paramsSchema = routeConfig.params;
+    const querySchema = routeConfig.query;
     
     if (routeConfig.rateLimit) {
       middlewares.push(rateLimit(routeConfig.rateLimit));
@@ -251,9 +253,21 @@ export async function createServer(globalConfig, routesDir, db) {
 
   const taskManager = await scanTasks({ db, io });
 
+  let isShuttingDown = false;
   const shutdown = async () => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
     if (taskManager) taskManager.stopAll();
     if (io) io.close();
+    
+    if (typeof globalConfig.onShutdown === 'function') {
+      try {
+        await globalConfig.onShutdown(db);
+      } catch (err) {
+        console.error('[bro.js] Error during database teardown hook:', err);
+      }
+    }
+
     return new Promise((resolve) => {
       server.close(() => resolve());
     });

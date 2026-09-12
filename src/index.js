@@ -26,3 +26,4 @@ export function defineConfig(config) {
 }
 
 export { z };
+export { loadLocale } from './locale.js';

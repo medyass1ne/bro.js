@@ -45,3 +45,44 @@ export default defineConfig({
 ## Strict Env Validation
 
 If you define an `env` Zod schema, `bro.js` will execute `.safeParse(process.env)` before *anything* else boots. If a required environment variable is missing, the framework immediately crashes with a red error log, preventing bad deployments!
+
+## Security: Fail-Closed Production Auth
+
+By default, the framework starts with a placeholder `jwtSecret` for quick local iteration. However, `bro.js` employs a **Fail-Closed** security model. If you attempt to boot the server in `NODE_ENV=production` while still using a default or missing JWT secret (like `dev_secret_please_change` or `bro_default_secret_key`), the application will instantly throw a fatal exception and refuse to start, protecting you from critical production vulnerabilities.
+
+## Server Lifecycle & Graceful Shutdown
+
+When running the application via the CLI command `bro start` in production, `bro.js` automatically intercepts operating system termination signals (`SIGINT` and `SIGTERM`) and performs a **Graceful Shutdown**. It stops accepting new HTTP connections, safely flushes ongoing requests, terminates WebSockets, and gracefully halts background tasks.
+
+### Programmatic Usage
+If you are consuming the core framework directly in your own custom bootstrap script (instead of using the CLI), you can tap into the exact same graceful shutdown API:
+
+```javascript
+import { createServer } from 'bro-framework/src/server.js';
+// ...
+const { server, shutdown } = await createServer(globalConfig, routesDir, db);
+
+process.on('SIGTERM', async () => {
+  console.log("Shutting down...");
+  await shutdown();
+  console.log("Clean exit.");
+  process.exit(0);
+});
+```
+
+### Graceful DB Teardown
+If your injected database requires a manual teardown to close connections gracefully, define the `onShutdown` hook in your configuration:
+
+```javascript
+import { defineConfig, z } from 'bro-framework';
+
+export default defineConfig({
+  db: async () => { 
+    // e.g. await mongoose.connect(...)
+  },
+  onShutdown: async (db) => {
+    console.log('Closing database connection...');
+    await db.close(); // Replace with your ORM's disconnect method
+  }
+});
+```

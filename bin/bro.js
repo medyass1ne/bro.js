@@ -224,13 +224,15 @@ async function bootstrap() {
       
       printCurrentRoutes(currentRoutes);
 
-      const watcher = chokidar.watch([routesDir, localeDir], { ignoreInitial: true });
+      const localeGlob = localeDir.replace(/\\/g, '/') + '/*.{js,mjs,ts}';
+      const watcher = chokidar.watch([routesDir, localeGlob], { ignoreInitial: true });
       
       watcher.on('all', async (event, filepath) => {
         const isJavaScriptFile = filepath.endsWith('.js') || filepath.endsWith('.ts') || filepath.endsWith('.mjs');
         if (!isJavaScriptFile) return;
-        const isLocaleFile = path.dirname(filepath) === path.resolve(localeDir);
-        
+        const relLocale = path.relative(path.resolve(localeDir), filepath);
+        const isLocaleFile = !relLocale.startsWith('..') && !path.isAbsolute(relLocale);
+
         try {
           const reloadStartTime = performance.now();
           if (isLocaleFile) {

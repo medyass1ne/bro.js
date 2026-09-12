@@ -22,18 +22,26 @@ bro sdk
 The generated client is a pure vanilla JavaScript `fetch` wrapper. It perfectly maps to your API structure.
 
 ```javascript
-import { api, setBaseURL, setTokenKey } from './bro-sdk.js';
+import { api, setBaseURL, setTokenKey, setLocale } from './bro-sdk.js';
 
 // Setup (optional, defaults to localhost:5000 and 'bro_token')
 setBaseURL('https://api.myproduction.com');
+setTokenKey('my_custom_token_key');
+setLocale('fr'); // Sends Accept-Language: fr
 
 // The client automatically checks localStorage for your JWT
 // and attaches it as a Bearer token!
 
-async function fetchUser() {
-  // Maps to `GET /users/:id`
-  const user = await api.users.id('123').get();
-  console.log(user);
+async function fetchUsers() {
+  // Standard dot-notation calls. Maps to `GET /users?page=1`
+  const users = await api.users.get({ page: 1 });
+  console.log(users);
+}
+
+async function fetchUserPosts() {
+  // Parameterized segment invocations. Maps to `GET /users/:userId/posts`
+  const posts = await api.users.userId('123').posts.get();
+  console.log(posts);
 }
 
 async function login(email, password) {
@@ -42,6 +50,6 @@ async function login(email, password) {
   const response = await api.auth.login.post({ email, password });
   
   // Save the token, the client will use it automatically on the next request
-  localStorage.setItem('bro_token', response.token);
+  localStorage.setItem('my_custom_token_key', response.token);
 }
 ```
