@@ -37,6 +37,12 @@ export default defineConfig({
     jwtSecret: 'dev_secret_please_change',
     expiresIn: '7d'
   },
+
+  // Optional file-based API translations
+  // Add locale/en.js, locale/fr.js, etc.
+  locale: {
+    defaultLocale: 'en'
+  },
   
   // API Documentation (Scalar UI)
   docs: process.env.NODE_ENV !== 'production', // Set to false to disable completely, or true to force in prod
@@ -190,7 +196,8 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  const { app, server, routes: initialRoutes, reload, io, shutdown } = await createServer(globalConfig, routesDir, db);
+  const localeDir = globalConfig.locale?.directory || path.join(cwd, 'locale');
+  const { app, server, routes: initialRoutes, reload, reloadLocale, io, shutdown } = await createServer(globalConfig, routesDir, db);
   const port = globalConfig.port;
   
   let currentRoutes = initialRoutes;
@@ -217,20 +224,26 @@ async function bootstrap() {
       
       printCurrentRoutes(currentRoutes);
 
-      const watcher = chokidar.watch(routesDir, { ignoreInitial: true });
+      const watcher = chokidar.watch([routesDir, localeDir], { ignoreInitial: true });
       
       watcher.on('all', async (event, filepath) => {
-        if (!filepath.endsWith('.js') && !filepath.endsWith('.ts')) return;
+        const isJavaScriptFile = filepath.endsWith('.js') || filepath.endsWith('.ts') || filepath.endsWith('.mjs');
+        if (!isJavaScriptFile) return;
+        const isLocaleFile = path.dirname(filepath) === path.resolve(localeDir);
         
         try {
           const reloadStartTime = performance.now();
-          currentRoutes = await reload();
+          if (isLocaleFile) {
+            await reloadLocale();
+          } else {
+            currentRoutes = await reload();
+          }
           const reloadTimeMs = performance.now() - reloadStartTime;
           
-          printHotReload(path.basename(filepath), event, reloadTimeMs);
+          printHotReload(path.basename(filepath), event, reloadTimeMs, isLocaleFile ? 'Locale' : 'Route');
           printCurrentRoutes(currentRoutes);
         } catch (err) {
-          console.error(`\n  ✗ Error hot-reloading routes:`, err);
+          console.error(`\n  ✗ Error hot-reloading ${isLocaleFile ? 'locale' : 'routes'}:`, err);
         }
       });
     }

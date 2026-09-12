@@ -1,11 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import http from 'node:http';
+import path from 'node:path';
 import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import { apiReference } from '@scalar/express-api-reference';
 import { verifyJwt, signJwt } from './auth.js';
+import { loadLocale } from './locale.js';
 import { loadRoutes } from './router.js';
 import { scanTasks } from './tasks.js';
 
@@ -14,7 +16,7 @@ import { scanTasks } from './tasks.js';
  * @param {Object} globalConfig - User's bro.config.js configurations.
  * @param {string} routesDir - Path to the target routes directory.
  * @param {any} db - Initialized database instance.
- * @returns {Promise<{ app: import('express').Application, server: http.Server, routes: Array, reload: Function, io: import('socket.io').Server }>}
+ * @returns {Promise<{ app: import('express').Application, server: http.Server, routes: Array, reload: Function, reloadLocale: Function, io: import('socket.io').Server, shutdown: Function }>}
  */
 export async function createServer(globalConfig, routesDir, db) {
   if (process.env.NODE_ENV === 'production' && ['dev_secret_please_change', 'bro_default_secret_key'].includes(globalConfig.jwtSecret)) {
@@ -23,6 +25,8 @@ export async function createServer(globalConfig, routesDir, db) {
 
   const app = express();
   const server = http.createServer(app);
+  const localeDirectory = globalConfig.locale?.directory || path.join(process.cwd(), 'locale');
+  let locale = await loadLocale(localeDirectory, globalConfig.locale);
   
   const corsConfig = globalConfig.server?.cors !== undefined ? globalConfig.server.cors : true;
   
@@ -80,6 +84,7 @@ export async function createServer(globalConfig, routesDir, db) {
     
     middlewares.push(async (req, res) => {
       try {
+        const requestLocale = locale.resolveLocale(req);
         const ctx = {
           env: globalConfig.envData || process.env,
           db,
@@ -88,6 +93,8 @@ export async function createServer(globalConfig, routesDir, db) {
           params: req.params,
           query: req.query,
           files: req.files || req.file,
+          locale: requestLocale,
+          t: (key, values) => locale.translate(requestLocale, key, values),
           user: null,
           jwt: { sign: (payload, opts) => signJwt(payload, globalConfig.jwtSecret, opts || { expiresIn: globalConfig.auth?.expiresIn || '1d' }) },
           error: (status, message) => {
@@ -235,6 +242,11 @@ export async function createServer(globalConfig, routesDir, db) {
     return routes;
   };
 
+  const reloadLocale = async () => {
+    locale = await loadLocale(localeDirectory, globalConfig.locale);
+    return locale;
+  };
+
   const initialRoutes = await reload();
 
   const taskManager = await scanTasks({ db, io });
@@ -247,5 +259,5 @@ export async function createServer(globalConfig, routesDir, db) {
     });
   };
 
-  return { app, server, routes: initialRoutes, reload, io, shutdown };
+  return { app, server, routes: initialRoutes, reload, reloadLocale, io, shutdown };
 }

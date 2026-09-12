@@ -72,8 +72,8 @@ export function printRoute(method, routePath, hasAuth, isLast = false) {
   console.log(`  ${colors.dim}${branch}${colors.reset} ${coloredMethod} ${routePath}${authIcon}`);
 }
 
-export function printHotReload(fileName, event, reloadTimeMs) {
+export function printHotReload(fileName, event, reloadTimeMs, resourceType = 'Route') {
   const time = typeof reloadTimeMs === 'number' ? reloadTimeMs.toFixed(0) : reloadTimeMs;
-  console.log(`\n  ${colors.cyan}Route updated:${colors.reset} ${colors.bold}${fileName}${colors.reset} ${colors.dim}(${event})${colors.reset}`);
+  console.log(`\n  ${colors.cyan}${resourceType} updated:${colors.reset} ${colors.bold}${fileName}${colors.reset} ${colors.dim}(${event})${colors.reset}`);
   console.log(`  ${colors.dim}Remapped in ${time}ms${colors.reset}\n`);
 }
