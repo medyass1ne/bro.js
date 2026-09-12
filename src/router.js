@@ -43,6 +43,12 @@ export function parseRouteFile(filePath, routesDir) {
   if (parts.length < 2) return null; 
   
   const method = parts.pop().toLowerCase();
+  
+  const allowedMethods = new Set(['get', 'post', 'put', 'delete', 'patch', 'options', 'head']);
+  if (!allowedMethods.has(method)) {
+    throw new Error(`Invalid HTTP method "${method}" in file: ${filePath}`);
+  }
+  
   const namePart = parts.join('.');
   
   let routePath = '/' + path.dirname(relativePath).replace(/\\/g, '/');
@@ -50,6 +56,15 @@ export function parseRouteFile(filePath, routesDir) {
   
   if (namePart !== 'index') {
     routePath += `/${namePart}`;
+  }
+  
+  const bracketRegex = /\[(.*?)\]/g;
+  let match;
+  while ((match = bracketRegex.exec(routePath)) !== null) {
+    const paramName = match[1];
+    if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(paramName)) {
+      throw new Error(`Invalid dynamic parameter "[${paramName}]" in file: ${filePath}. Must be a valid JavaScript identifier.`);
+    }
   }
   
   routePath = routePath.replace(/\[(.*?)\]/g, ':$1');

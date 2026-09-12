@@ -139,3 +139,46 @@ test('6. Runtime validation using config.schema.body rejects invalid data', asyn
   server.close();
   fs.rmSync(routesDir, { recursive: true, force: true });
 });
+
+test('7. Route compilation crashes on malformed HTTP methods (e.g., users.psot.js)', () => {
+  try {
+    parseRouteFile('routes/users.psot.js', 'routes');
+    assert.fail('Should have thrown an error for invalid method');
+  } catch (err) {
+    assert.ok(err.message.includes('Invalid HTTP method "psot"'));
+  }
+});
+
+test('8. Route compilation crashes on invalid dynamic brackets', () => {
+  try {
+    parseRouteFile('routes/users/[user-id].get.js', 'routes');
+    assert.fail('Should have thrown an error for invalid dynamic parameter');
+  } catch (err) {
+    assert.ok(err.message.includes('Invalid dynamic parameter "[user-id]"'));
+  }
+});
+
+test('9. SDK generator crashes on static vs dynamic route conflict', async () => {
+  const originalRoutes = path.join(process.cwd(), 'routes');
+  const tempRoutes = path.join(process.cwd(), 'routes_backup_2');
+  
+  if (fs.existsSync(originalRoutes)) {
+    fs.renameSync(originalRoutes, tempRoutes);
+  }
+  
+  fs.mkdirSync(originalRoutes, { recursive: true });
+  fs.writeFileSync(path.join(originalRoutes, '[id].get.js'), 'export default {}');
+  fs.writeFileSync(path.join(originalRoutes, 'id.get.js'), 'export default {}');
+  
+  try {
+    await generateSDK();
+    assert.fail('Should have thrown a collision error');
+  } catch (err) {
+    assert.ok(err.message.includes('SDK Collision'));
+  } finally {
+    fs.rmSync(originalRoutes, { recursive: true, force: true });
+    if (fs.existsSync(tempRoutes)) {
+      fs.renameSync(tempRoutes, originalRoutes);
+    }
+  }
+});

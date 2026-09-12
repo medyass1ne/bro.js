@@ -109,7 +109,7 @@ Stop importing singleton database connections and socket instances into every fi
 If you've ever hand-written OpenAPI YAML, you know the pain. `bro.js` parses your Zod schemas and automatically serves a stunning, interactive [Scalar](https://scalar.com/) API playground at `/docs`. It's highly secure: by default, these internal docs are disabled in production mode.
 
 ### The Frontend SDK Generator
-Tired of writing frontend `fetch` wrappers? Run `bro sdk`. The CLI will parse your backend routes and compile a `bro-client.js` file for your frontend. It features built-in token management, request stringification, and type-safe deep tree traversal (e.g., `api.users.id("123").post(data)`).
+Tired of writing frontend `fetch` wrappers? Run `bro sdk`. The CLI will parse your backend routes and compile a `bro-sdk.js` file for your frontend. It features built-in token management, request stringification, and type-safe deep tree traversal (e.g., `api.users.id("123").post(data)`).
 
 ### Background Task Scheduler
 Don't spin up a separate worker server. Drop a JavaScript file anywhere in the `tasks/` folder, export a cron string (e.g., `"0 0 * * *"`), and an async handler. `bro.js` natively schedules it as a background worker with full access to your injected database and WebSocket contexts.

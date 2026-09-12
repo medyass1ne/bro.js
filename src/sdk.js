@@ -98,6 +98,10 @@ function generateApiObject(endpoints) {
       
       if (!current[name]) {
         current[name] = { _isParam: isParam, _methods: {}, _children: {}, _path: pathAcc };
+      } else {
+        if (current[name]._isParam !== isParam) {
+          throw new Error(`SDK Collision: Route segment "${name}" conflicts between static and dynamic parameters at path "${pathAcc}"`);
+        }
       }
       
       if (i === parts.length - 1) {

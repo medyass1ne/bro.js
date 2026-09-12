@@ -9,7 +9,7 @@ register();
 
 import { createServer } from '../src/server.js';
 import { colors, printBanner, printRoute, printHotReload } from '../src/logger.js';
-import { scanTasks, stopTasks } from '../src/tasks.js';
+import { scanTasks } from '../src/tasks.js';
 import { generateSDK } from '../src/sdk.js';
 import dotenv from 'dotenv';
 import chokidar from 'chokidar';
@@ -204,7 +204,7 @@ async function bootstrap() {
       console.log(`[bro.js] Server running in production on port ${port}`);
     }
     
-    await scanTasks({ db, io });
+    let taskManager = await scanTasks({ db, io });
     
     if (command === 'dev') {
       const printCurrentRoutes = (routesToPrint) => {
@@ -240,7 +240,7 @@ async function bootstrap() {
 
     const handleShutdown = async (signal) => {
       console.log(`\n[bro.js] Received ${signal}. Shutting down gracefully...`);
-      stopTasks();
+      if (taskManager) taskManager.stopAll();
       if (io) io.close();
       server.close(() => {
         console.log('[bro.js] HTTP server closed.');

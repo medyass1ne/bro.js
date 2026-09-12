@@ -1,3 +1,7 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 export const colors = {
   reset: "\x1b[0m",
   bold: "\x1b[1m",
@@ -25,7 +29,16 @@ export function formatMethod(method) {
 
 export function printBanner(port, durationMs) {
   const time = durationMs.toFixed(0);
-  const version = "2.0.1";
+  
+  let version = "2.2.0";
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const pkgPath = path.join(__dirname, '..', 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    version = pkg.version;
+  } catch(e) {}
+  
   const innerWidth = 47;
 
   const stripAnsi = (str) => str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");

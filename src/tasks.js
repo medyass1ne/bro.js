@@ -5,21 +5,24 @@ import cron from 'node-cron';
 import { colors } from './logger.js';
 import { scanDir } from './router.js';
 
-let taskHandles = [];
-
-export function stopTasks() {
-  taskHandles.forEach(t => t.stop());
-  taskHandles = [];
+export class TaskManager {
+  constructor() {
+    this.taskHandles = [];
+  }
+  
+  stopAll() {
+    this.taskHandles.forEach(t => t.stop());
+    this.taskHandles = [];
+  }
 }
 
 export async function scanTasks(ctx) {
+  const manager = new TaskManager();
   const tasksDir = path.join(process.cwd(), 'tasks');
-  if (!fs.existsSync(tasksDir)) return;
+  if (!fs.existsSync(tasksDir)) return manager;
   
-  stopTasks();
-
   const files = scanDir(tasksDir);
-  if (files.length === 0) return;
+  if (files.length === 0) return manager;
   
   let count = 0;
   for (const file of files) {
@@ -35,7 +38,7 @@ export async function scanTasks(ctx) {
             console.error(`\n  ${colors.red}❌ Task Error (${file}):${colors.reset}`, err);
           }
         });
-        taskHandles.push(task);
+        manager.taskHandles.push(task);
         count++;
       }
     } catch (err) {
@@ -46,4 +49,6 @@ export async function scanTasks(ctx) {
   if (count > 0) {
     console.log(`  ${colors.dim}├──${colors.reset} ${colors.cyan}Scheduled ${count} background task(s)${colors.reset}`);
   }
+  
+  return manager;
 }
