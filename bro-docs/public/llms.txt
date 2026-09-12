@@ -8,7 +8,7 @@ This document serves as the definitive reference manual for the `bro-framework` 
 `bro.js` is a zero-boilerplate, file-based routing Node.js backend engine. It aggressively eliminates boilerplate through intelligent file-system structures, automatic Zod validation, seamless JWT injection, native Socket.io integration, and zero Express configuration.
 
 ### Core Architectural Rules:
-- **Pure ES Modules:** The framework runs strictly on ESM. All files must use `import` / `export` syntax. CommonJS `require()` is fundamentally unsupported.
+- **Pure ES Modules:** The framework runs strictly on vESM. All files must use `import` / `export` syntax. CommonJS `require()` is fundamentally unsupported.
 - **Dual JS/TS Support:** TypeScript is natively supported out of the box via `tsx`.
 - **Validation Engine:** All request validation MUST be done via `zod`.
 - **Background Processes:** Scheduled via `node-cron` inside the `tasks/` directory.
@@ -307,12 +307,11 @@ The `npx bro sdk` CLI command statically analyzes your backend file routing stru
 
 ### Consuming the SDK (Frontend Example):
 ```javascript
-import { api, setBaseURL, setTokenKey, setLocale } from './bro-sdk.js';
+import { api, setBaseURL, setTokenKey } from './bro-sdk.js';
 
 // Setup (Optional)
 setBaseURL('https://api.myapp.com');
 setTokenKey('my_custom_token'); // Reads from localStorage
-setLocale('fr'); // Sets Accept-Language header
 
 // Static Route Example (routes/users.get.js)
 const users = await api.users.get({ page: 1, limit: 10 }); 
@@ -396,7 +395,7 @@ Any generic error thrown (e.g., `throw new Error("Something broke")`) or unhandl
 The `bro` CLI provides an array of commands strictly focused on developer experience and zero-config execution.
 
 ### Hot Reloading (`bro dev`)
-The development server utilizes `chokidar` to actively watch the `routes/` directory (and optionally the `locale/` directory).
+The development server utilizes `chokidar` to actively watch the `routes/` directory.
 - When a file is modified, the internal `express.Router` stack is hot-swapped dynamically without dropping the main HTTP server process.
 - The terminal visually indicates the time taken for the hot-reload (typically sub-10ms).
 
