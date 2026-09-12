@@ -106,21 +106,18 @@ export async function createServer(globalConfig, routesDir, db) {
           }
         };
 
-        if (routeConfig.auth) {
-          const authHeader = req.headers.authorization;
-          if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ error: 'Unauthorized', details: 'Missing or invalid Bearer token' });
-          }
-          
-          const token = authHeader.split(' ')[1];
-          const authResult = verifyJwt(token, globalConfig.jwtSecret);
-          
-          if (!authResult.valid) {
-            return res.status(401).json({ error: 'Unauthorized', details: authResult.error });
-          }
-          
-          ctx.user = authResult.payload;
+        const authHeader = req.headers.authorization;
+        if ((!authHeader || !authHeader.startsWith('Bearer ')) && routeConfig.auth) {
+          return res.status(401).json({ error: 'Unauthorized', details: 'Missing or invalid Bearer token' });
         }
+        
+        const token = authHeader?.split(' ')[1] ?? '';
+        const authResult = verifyJwt(token, globalConfig.jwtSecret);
+        
+        if (!authResult.valid && routeConfig.auth) {
+          return res.status(401).json({ error: 'Unauthorized', details: authResult.error });
+        }
+        ctx.user = authResult?.payload ?? null;
 
         if (paramsSchema) {
           const result = paramsSchema.safeParse(req.params);
