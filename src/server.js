@@ -7,6 +7,7 @@ import multer from 'multer';
 import { apiReference } from '@scalar/express-api-reference';
 import { verifyJwt, signJwt } from './auth.js';
 import { loadRoutes } from './router.js';
+import { scanTasks } from './tasks.js';
 
 /**
  * Creates and configures the core Express server.
@@ -52,12 +53,9 @@ export async function createServer(globalConfig, routesDir, db) {
     }
     
     if (routeConfig.upload) {
+      const defaultLimits = { fileSize: 10 * 1024 * 1024, files: 5, fields: 20, parts: 25, fieldSize: 1024 * 1024 };
       const routeMulterConfig = {
-        limits: globalConfig.upload?.limits || {
-          fileSize: 10 * 1024 * 1024,
-          files: 5,
-          fields: 20
-        }
+        limits: { ...defaultLimits, ...(globalConfig.upload?.limits || {}) }
       };
       if (typeof routeConfig.upload === 'object') {
         if (routeConfig.upload.limits) {
@@ -239,5 +237,15 @@ export async function createServer(globalConfig, routesDir, db) {
 
   const initialRoutes = await reload();
 
-  return { app, server, routes: initialRoutes, reload, io };
+  const taskManager = await scanTasks({ db, io });
+
+  const shutdown = async () => {
+    if (taskManager) taskManager.stopAll();
+    if (io) io.close();
+    return new Promise((resolve) => {
+      server.close(() => resolve());
+    });
+  };
+
+  return { app, server, routes: initialRoutes, reload, io, shutdown };
 }

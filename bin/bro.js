@@ -9,7 +9,6 @@ register();
 
 import { createServer } from '../src/server.js';
 import { colors, printBanner, printRoute, printHotReload } from '../src/logger.js';
-import { scanTasks } from '../src/tasks.js';
 import { generateSDK } from '../src/sdk.js';
 import dotenv from 'dotenv';
 import chokidar from 'chokidar';
@@ -191,7 +190,7 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  const { app, server, routes: initialRoutes, reload, io } = await createServer(globalConfig, routesDir, db);
+  const { app, server, routes: initialRoutes, reload, io, shutdown } = await createServer(globalConfig, routesDir, db);
   const port = globalConfig.port;
   
   let currentRoutes = initialRoutes;
@@ -203,8 +202,6 @@ async function bootstrap() {
     } else if (command === 'start') {
       console.log(`[bro.js] Server running in production on port ${port}`);
     }
-    
-    let taskManager = await scanTasks({ db, io });
     
     if (command === 'dev') {
       const printCurrentRoutes = (routesToPrint) => {
@@ -240,12 +237,9 @@ async function bootstrap() {
 
     const handleShutdown = async (signal) => {
       console.log(`\n[bro.js] Received ${signal}. Shutting down gracefully...`);
-      if (taskManager) taskManager.stopAll();
-      if (io) io.close();
-      server.close(() => {
-        console.log('[bro.js] HTTP server closed.');
-        process.exit(0);
-      });
+      await shutdown();
+      console.log('[bro.js] HTTP server closed.');
+      process.exit(0);
     };
 
     process.on('SIGINT', () => handleShutdown('SIGINT'));

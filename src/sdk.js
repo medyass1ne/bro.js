@@ -82,7 +82,7 @@ export function setTokenKey(key) {
 }
 
 function generateApiObject(endpoints) {
-  const tree = {};
+  const tree = Object.create(null);
   
   for (const { routePath, method } of endpoints) {
     const parts = routePath.split('/').filter(Boolean);
@@ -97,7 +97,7 @@ function generateApiObject(endpoints) {
       pathAcc += '/' + part;
       
       if (!current[name]) {
-        current[name] = { _isParam: isParam, _methods: {}, _children: {}, _path: pathAcc };
+        current[name] = Object.assign(Object.create(null), { _isParam: isParam, _methods: Object.create(null), _children: Object.create(null), _path: pathAcc });
       } else {
         if (current[name]._isParam !== isParam) {
           throw new Error(`SDK Collision: Route segment "${name}" conflicts between static and dynamic parameters at path "${pathAcc}"`);
@@ -112,7 +112,7 @@ function generateApiObject(endpoints) {
     }
     
     if (parts.length === 0) {
-      if (!tree['root']) tree['root'] = { _isParam: false, _methods: {}, _children: {}, _path: '/' };
+      if (!tree['root']) tree['root'] = Object.assign(Object.create(null), { _isParam: false, _methods: Object.create(null), _children: Object.create(null), _path: '/' });
       tree['root']._methods[method.toLowerCase()] = '/';
     }
   }
@@ -129,7 +129,7 @@ function generateApiObject(endpoints) {
         result += `${indent}${formattedKey}: (${key}) => ({\n`;
         
         for (const [m, p] of Object.entries(val._methods)) {
-          const templatedPath = p.replace(/:([a-zA-Z0-9_]+)/g, '${encodeURIComponent($1)}');
+          const templatedPath = p.replace(/:([a-zA-Z0-9_$]+)/g, '${encodeURIComponent($1)}');
           result += `${indent}  ${m}: (data) => request('${m}', \`${templatedPath}\`, data),\n`;
         }
         
