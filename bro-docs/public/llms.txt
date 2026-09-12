@@ -1,59 +1,412 @@
-# bro.js - AI Context Document
+# bro.js 2.2.1 - AI Context & Developer Reference Manual
+This document serves as the definitive reference manual for the `bro-framework` (version 2.2.1), engineered specifically for LLM context ingestion and coding agents (e.g., Cursor, Windsurf, Claude, Gemini, GPT).
 
-## Core Philosophy
-bro.js is a zero-boilerplate Node.js backend framework. It acts as an extremely thin, high-powered wrapper around Express, Zod, and Socket.io. It enforces pure ES Modules (no TS, no CommonJS).
+---
 
-## Routing
-Routing is file-system based.
-- Path: `routes/`
-- Syntax: `routes/folder/[param].method.js` -> `METHOD /folder/:param`
-- Example: `routes/users/[id].get.js` maps to `GET /users/:id`
+## 1. Framework Overview & System Directives
 
-## Route Definition (defineRoute)
-Every route must default export `defineRoute`.
+`bro.js` is a zero-boilerplate, file-based routing Node.js backend engine. It aggressively eliminates boilerplate through intelligent file-system structures, automatic Zod validation, seamless JWT injection, native Socket.io integration, and zero Express configuration.
 
-```javascript
+### Core Architectural Rules:
+- **Pure ES Modules:** The framework runs strictly on vESM. All files must use `import` / `export` syntax. CommonJS `require()` is fundamentally unsupported.
+- **Dual JS/TS Support:** TypeScript is natively supported out of the box via `tsx`.
+- **Validation Engine:** All request validation MUST be done via `zod`.
+- **Background Processes:** Scheduled via `node-cron` inside the `tasks/` directory.
+
+### Strict Negative Constraints (DO NOT DO THESE):
+- **NEVER** use `express.Router()`. Routing is entirely file-system-based.
+- **NEVER** use standard Express `(req, res, next)` signatures in your route handlers. Handlers receive a single unified `ctx` object.
+- **NEVER** use `app.use()`. Global middleware is handled natively via configuration.
+- **NEVER** call `res.json()`, `res.send()`, or `res.status()`. Return a JavaScript object from your handler and the framework will serialize it to JSON with a 200 OK status.
+- **NEVER** hardcode production JWT secrets. If `NODE_ENV=production` and the secret is `dev_secret_please_change` or `bro_default_secret_key`, the framework will fail-close and throw a fatal startup error.
+- **NEVER** define invalid HTTP methods in filenames (e.g., `users.psot.js`). The router strictly validates methods against a whitelist (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `OPTIONS`, `HEAD`).
+
+---
+
+## 2. File-Based Routing System
+
+Routing is dictated purely by the file system inside the `routes/` directory.
+
+### Naming Conventions & Resolution Rules:
+The file name maps directly to the URL path and HTTP method. The format is `[param(s)?].[method].[js|ts]`.
+
+- `routes/index.get.js` -> `GET /`
+- `routes/users.get.js` -> `GET /users`
+- `routes/users.post.ts` -> `POST /users`
+
+### Dynamic Route Extraction:
+Use Next.js-style bracket syntax `[param]` for dynamic segments. These translate natively into Express `:param` patterns.
+All brackets MUST contain valid JavaScript identifiers. Malformed brackets (e.g., `[user-id]`) will trigger a fatal startup error.
+
+- `routes/users/[userId].get.js` -> `GET /users/:userId`
+- `routes/orgs/[orgId]/members/[memberId].get.ts` -> `GET /orgs/:orgId/members/:memberId`
+
+*SDK Constraint:* Do not create conflicting static and dynamic paths in the same directory (e.g., `users/id.get.js` and `users/[id].get.js`). The SDK generator parses route structures and will throw a fatal `SDK Collision` error to protect client logic.
+
+---
+
+## 3. Complete `defineRoute` API Specification
+
+Every route file MUST export default a configuration object using `defineRoute` from `bro-framework`.
+
+### HTTP Method Examples
+
+**GET Route Example:**
+```typescript
 import { defineRoute, z } from 'bro-framework';
 
 export default defineRoute({
-  auth: true, // Auto-verifies JWT and injects `ctx.user`
-  upload: true, // Auto-parses multipart forms and injects `ctx.files`
-  body: z.object({ /* schema */ }), // Auto-rejects invalid bodies with 400
-  params: z.object({ /* schema */ }), // Validates URL params
-  query: z.object({ /* schema */ }), // Validates query strings
-  rateLimit: { windowMs: 60000, max: 10 }, // Route-specific throttling
-  
+  schema: {
+    query: z.object({
+      page: z.coerce.number().min(1).default(1),
+      limit: z.coerce.number().min(1).max(100).default(10)
+    })
+  },
   handler: async (ctx) => {
-    // Return object to auto-send 200 JSON
-    return { status: "ok" }; 
+    // Return data directly. Responds with 200 OK.
+    return { data: [], page: ctx.query.page };
   }
 });
 ```
 
-## The Context Object (ctx)
-The handler function receives a destructured context:
-- `ctx.body` / `ctx.params` / `ctx.query`: Pre-validated Zod outputs.
-- `ctx.user`: Decoded JWT payload (requires `auth: true`).
-- `ctx.db`: Injected global database connection instance.
-- `ctx.io`: Injected global Socket.io server instance.
-- `ctx.files`: Uploaded `multer` files (requires `upload: true`).
+**POST Route Example:**
+```typescript
+import { defineRoute, z } from 'bro-framework';
 
-## Configuration (bro.config.js)
-The global `bro.config.js` configures the server, database injection, and sockets.
-
-```javascript
-import { defineConfig, z } from 'bro-framework';
-
-export default defineConfig({
-  env: z.object({ PORT: z.string() }), // Strict boot env validation
-  server: { port: 5000, cors: true },
-  auth: { jwtSecret: 'secret', expiresIn: '7d' },
-  rateLimit: { windowMs: 900000, max: 100 },
-  db: async () => { /* return DB connection */ },
-  sockets: async (io, db) => { /* setup socket.io */ }
+export default defineRoute({
+  schema: {
+    body: z.object({
+      email: z.string().email(),
+      password: z.string().min(8)
+    })
+  },
+  handler: async (ctx) => {
+    return { message: "Created successfully", email: ctx.body.email };
+  }
 });
 ```
-## Links & References
-- [Official Documentation](https://brojs.yessindevs.me)
-- [GitHub Repository](https://github.com/medyassine/bro.js)
-- [npm Package](https://www.npmjs.com/package/bro-framework)
+
+**PUT Route Example (with Dynamic Params):**
+```typescript
+// routes/users/[id].put.ts
+import { defineRoute, z } from 'bro-framework';
+
+export default defineRoute({
+  schema: {
+    params: z.object({
+      id: z.string().uuid()
+    }),
+    body: z.object({
+      name: z.string()
+    })
+  },
+  handler: async (ctx) => {
+    return { id: ctx.params.id, name: ctx.body.name };
+  }
+});
+```
+
+**DELETE Route Example:**
+```typescript
+// routes/users/[id].delete.ts
+import { defineRoute, z } from 'bro-framework';
+
+export default defineRoute({
+  schema: {
+    params: z.object({
+      id: z.string().uuid()
+    })
+  },
+  handler: async (ctx) => {
+    return { deleted: true, id: ctx.params.id };
+  }
+});
+```
+
+**PATCH Route Example:**
+```typescript
+import { defineRoute, z } from 'bro-framework';
+
+export default defineRoute({
+  schema: {
+    body: z.object({
+      status: z.enum(['active', 'inactive']).optional()
+    })
+  },
+  handler: async (ctx) => {
+    return { updated: true };
+  }
+});
+```
+
+### Route-Level Authentication
+To protect a route, add `auth: true`. The framework will demand an `Authorization: Bearer <token>` header, verify it against the global JWT secret, and inject the payload into `ctx.user`.
+```typescript
+export default defineRoute({
+  auth: true,
+  handler: async (ctx) => {
+    return { userId: ctx.user.id };
+  }
+});
+```
+
+### Route-Level Rate Limiting
+Granular rate limiting can be applied directly to a route.
+```typescript
+export default defineRoute({
+  rateLimit: {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5 // 5 requests per window
+  },
+  handler: async (ctx) => ({ success: true })
+});
+```
+
+### Advanced Multipart File Uploads
+Add `upload` to automatically process `multipart/form-data` using `multer`.
+Files are injected into `ctx.files` or `ctx.file`.
+
+**Single File:**
+```typescript
+export default defineRoute({
+  upload: {
+    single: 'avatar',
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+  },
+  handler: async (ctx) => {
+    return { filename: ctx.file.originalname, size: ctx.file.size };
+  }
+});
+```
+
+**Multiple Fields:**
+```typescript
+export default defineRoute({
+  upload: {
+    fields: [{ name: 'avatar', maxCount: 1 }, { name: 'gallery', maxCount: 4 }]
+  },
+  handler: async (ctx) => {
+    return { avatar: ctx.files['avatar'][0], gallery: ctx.files['gallery'] };
+  }
+});
+```
+
+---
+
+## 4. The Execution Context (`ctx`) Reference
+
+The `ctx` object replaces Express `req/res`. It is the single source of truth for the incoming request, validated data, and system instances.
+
+| Property | Description |
+| :--- | :--- |
+| `ctx.body` | The parsed and Zod-validated request body payload. Contains deeply typed data. |
+| `ctx.query` | The parsed and Zod-validated URL query string parameters. |
+| `ctx.params` | The parsed and Zod-validated dynamic path parameters (e.g. `[id]`). |
+| `ctx.user` | If `auth: true` is set, contains the decoded JSON payload of the JWT. Null otherwise. |
+| `ctx.db` | The initialized database connection injected from `bro.config.js`. Available globally. |
+| `ctx.io` | The live `Socket.io` server instance. Use this to `ctx.io.emit()` realtime events. |
+| `ctx.files` | An array or dictionary of uploaded files (if `upload` is configured). |
+| `ctx.file` | A single uploaded file (if `upload.single` is configured). |
+| `ctx.env` | Validated environment variables (if `env` schema is provided in global config). Fallbacks to raw `process.env`. |
+| `ctx.jwt.sign(payload, opts?)` | Utility function to dynamically generate signed JWT tokens using the global secret. |
+| `ctx.error(status, msg)` | Throw a custom error with an exact HTTP status code. Example: `ctx.error(403, "Forbidden")`. |
+
+---
+
+## 5. Global Configuration (`bro.config.js` via `defineConfig`)
+
+All global framework configurations reside in the `bro.config.js` file at the project root.
+
+```javascript
+import { defineConfig } from 'bro-framework';
+import { z } from 'zod';
+
+export default defineConfig({
+  // 1. Server Configuration
+  server: {
+    port: process.env.PORT || 5000,
+    cors: true // Or pass standard CORS options object
+  },
+
+  // 2. Environment Variable Validation
+  // If provided, bro.js will validate process.env on startup.
+  env: z.object({
+    DATABASE_URL: z.string().url(),
+    JWT_SECRET: z.string().min(16)
+  }),
+
+  // 3. Authentication & Security
+  // WARNING: Never use default secrets in production.
+  auth: {
+    jwtSecret: process.env.JWT_SECRET,
+    expiresIn: '7d'
+  },
+
+  // 4. OpenAPI Auto-Documentation (Scalar UI)
+  // Disable in production to prevent schema leaks.
+  docs: process.env.NODE_ENV !== 'production',
+
+  // 5. Global Rate Limiting
+  rateLimit: {
+    windowMs: 15 * 60 * 1000,
+    max: 100
+  },
+
+  // 6. Global File Upload Limits
+  upload: {
+    limits: {
+      fileSize: 10 * 1024 * 1024 // 10MB
+    }
+  },
+
+  // 7. Dependency Injection (Database)
+  // This function is executed once at startup. The return value is mapped to ctx.db.
+  db: async () => {
+    // E.g., await mongoose.connect(process.env.DATABASE_URL);
+    // return mongoose.connection;
+    return null; 
+  },
+
+  // 8. WebSocket Initialization
+  // Setup your socket listeners here. ctx.io is available to all routes and tasks.
+  sockets: async (io, db) => {
+    io.on('connection', (socket) => {
+      console.log('Client connected:', socket.id);
+    });
+  }
+});
+```
+
+---
+
+## 6. Real-Time WebSockets & Multi-Instance Scaling
+
+`bro.js` bundles Socket.io natively.
+- **Context Availability:** `ctx.io` is injected into every route handler and background task.
+- **Emitting Events from Routes:** 
+  ```typescript
+  handler: async (ctx) => {
+    ctx.io.emit('notification', { message: 'A new user signed up!' });
+    return { success: true };
+  }
+  ```
+- **Handling Events:** Define listeners in `bro.config.js` under the `sockets` configuration block.
+- **Multi-Node Scaling:** If you intend to run multiple `bro.js` instances behind a load balancer, ensure you integrate the `@socket.io/redis-adapter` within your `bro.config.js` `sockets` method and configure sticky sessions on your reverse proxy.
+
+---
+
+## 7. Automated Client SDK (`bro sdk`)
+
+You do not need to write raw `fetch` wrappers for the frontend.
+The `npx bro sdk` CLI command statically analyzes your backend file routing structure and compiles a perfectly mapped `bro-sdk.js` file for your frontend.
+
+### SDK Features:
+- **Built-in Token Management:** Extracts tokens from `localStorage` automatically or can be injected.
+- **Deep Tree Traversal:** API calls map perfectly to the file structure.
+- **Auto URL Formatting:** Handles URL encoding for dynamic parameters and serialization of query strings.
+
+### Consuming the SDK (Frontend Example):
+```javascript
+import { api, setBaseURL, setTokenKey } from './bro-sdk.js';
+
+// Setup (Optional)
+setBaseURL('https://api.myapp.com');
+setTokenKey('my_custom_token'); // Reads from localStorage
+
+// Static Route Example (routes/users.get.js)
+const users = await api.users.get({ page: 1, limit: 10 }); 
+// Triggers: GET /users?page=1&limit=10
+
+// Dynamic Nested Route Example (routes/users/[userId]/posts/[postId].patch.js)
+const post = await api.users.userId("123").posts.postId("456").patch({ title: "Updated" });
+// Triggers: PATCH /users/123/posts/456 with JSON body { "title": "Updated" }
+```
+
+---
+
+## 8. Background Tasks & Cron Jobs
+
+Do not spin up a separate worker server. `bro.js` natively orchestrates background tasks via `node-cron`.
+
+### Convention:
+Create JavaScript files inside the `tasks/` directory at the project root. The task runner recursively discovers all tasks.
+Each task file MUST export a `cron` string expression and an asynchronous `task` function.
+
+### Task Example (`tasks/cleanup.js`):
+```javascript
+// tasks/cleanup.js
+export const cron = "0 0 * * *"; // Runs every night at midnight
+
+export const task = async ({ db, io }) => {
+  console.log("Running night cleanup...");
+  
+  // You have full access to the database!
+  const deleted = await db.collection('sessions').deleteMany({ expired: true });
+  
+  // You can emit real-time events to connected clients!
+  io.emit('maintenance', { message: 'Nightly cleanup completed' });
+  
+  console.log(`Cleaned up ${deleted.deletedCount} sessions.`);
+};
+```
+### Scoped Task Manager (v2.2.1 Update):
+Background tasks are isolated in a scoped `TaskManager`. On `SIGINT` or `SIGTERM`, `bro.js` invokes `taskManager.stopAll()` to gracefully tear down the intervals, ensuring memory integrity when multiple server instances run in the same process.
+
+---
+
+## 9. Error Handling & HTTP Status Codes
+
+The framework completely abstracts HTTP response serialization.
+
+### Success:
+Simply `return {}` from your handler. The framework automatically parses this into a `200 OK` JSON response.
+
+### Throwing 400 Bad Request:
+Zod validation failures (Body, Params, Query) are automatically intercepted and result in a structured `400 Bad Request` response, avoiding the handler altogether.
+
+### Throwing Custom Status Codes:
+If you need to throw a specific error inside a handler, use the `ctx.error(status, message)` helper.
+
+```typescript
+handler: async (ctx) => {
+  const item = await ctx.db.find(ctx.params.id);
+  
+  if (!item) {
+    // Immediately throws a 404 response
+    ctx.error(404, 'Item not found in database');
+  }
+  
+  if (item.ownerId !== ctx.user.id) {
+    // Immediately throws a 403 Forbidden response
+    ctx.error(403, 'You do not have permission to access this item');
+  }
+
+  return item;
+}
+```
+
+### Uncaught Exceptions (500):
+Any generic error thrown (e.g., `throw new Error("Something broke")`) or unhandled promise rejection inside a route will be caught by the global error handler and returned as a `500 Internal Server Error`, alongside logging the full stack trace to the terminal.
+
+---
+
+## 10. CLI Tooling & Diagnostics
+
+The `bro` CLI provides an array of commands strictly focused on developer experience and zero-config execution.
+
+### Hot Reloading (`bro dev`)
+The development server utilizes `chokidar` to actively watch the `routes/` directory.
+- When a file is modified, the internal `express.Router` stack is hot-swapped dynamically without dropping the main HTTP server process.
+- The terminal visually indicates the time taken for the hot-reload (typically sub-10ms).
+
+### Production Server (`bro start`)
+The production command sets `NODE_ENV=production`. This enforces several critical security constraints:
+- Disables all file watchers.
+- Validates the `JWT_SECRET`.
+- Disables the `/docs` auto-generated Scalar UI unless explicitly forced to `true`.
+- Emits a clean JSON log format suitable for ingestion by Datadog, ELK, or CloudWatch.
+
+### Environment Variable Strictness
+Environment variables (`process.env`) should always be declared in the global `bro.config.js` using the `env` schema block. If validation fails on startup, the CLI intercepts the error, elegantly formats the exact missing or invalid fields to `stderr`, and forcefully exits with code `1`.
+
+This guarantees your server will never boot in a compromised or misconfigured state, enforcing the "fail-closed" security philosophy core to `bro.js`.

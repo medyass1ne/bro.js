@@ -15,14 +15,14 @@ Run the following command in your terminal:
 bro sdk
 ```
 
-`bro.js` will instantly parse your `routes/` folder and generate a `bro-client.js` file right in your directory.
+`bro.js` will instantly parse your `routes/` folder and generate a `bro-sdk.js` file right in your directory.
 
 ## Using the Client
 
 The generated client is a pure vanilla JavaScript `fetch` wrapper. It perfectly maps to your API structure.
 
 ```javascript
-import { api, setBaseURL, setTokenKey } from './bro-client.js';
+import { api, setBaseURL, setTokenKey } from './bro-sdk.js';
 
 // Setup (optional, defaults to localhost:5000 and 'bro_token')
 setBaseURL('https://api.myproduction.com');

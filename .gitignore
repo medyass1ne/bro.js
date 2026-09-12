@@ -2,3 +2,9 @@
 /.history
 /bro-docs/.next
 /bro-docs/node_modules
+BRO_FRAMEWORK_2.1.0_AUDIT.md
+BRO_FRAMEWORK_2.2.0_AUDIT.md
+/test
+/routes
+bro-sdk.js
+bro.config.js

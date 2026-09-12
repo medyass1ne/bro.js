@@ -49,7 +49,10 @@ async function request(method, path, data) {
     options.body = JSON.stringify(data);
   } else if (data && ['GET', 'DELETE'].includes(method.toUpperCase())) {
     const params = new URLSearchParams(data);
-    path += '?' + params.toString();
+    const qs = params.toString();
+    if (qs) {
+      path += '?' + qs;
+    }
   }
 
   const url = CONFIG.baseURL + path;
@@ -88,7 +91,7 @@ export function setLocale(locale) {
 }
 
 function generateApiObject(endpoints) {
-  const tree = {};
+  const tree = Object.create(null);
   
   for (const { routePath, method } of endpoints) {
     const parts = routePath.split('/').filter(Boolean);
@@ -103,7 +106,11 @@ function generateApiObject(endpoints) {
       pathAcc += '/' + part;
       
       if (!current[name]) {
-        current[name] = { _isParam: isParam, _methods: {}, _children: {}, _path: pathAcc };
+        current[name] = Object.assign(Object.create(null), { _isParam: isParam, _methods: Object.create(null), _children: Object.create(null), _path: pathAcc });
+      } else {
+        if (current[name]._isParam !== isParam) {
+          throw new Error(`SDK Collision: Route segment "${name}" conflicts between static and dynamic parameters at path "${pathAcc}"`);
+        }
       }
       
       if (i === parts.length - 1) {
@@ -114,7 +121,7 @@ function generateApiObject(endpoints) {
     }
     
     if (parts.length === 0) {
-      if (!tree['root']) tree['root'] = { _isParam: false, _methods: {}, _children: {}, _path: '/' };
+      if (!tree['root']) tree['root'] = Object.assign(Object.create(null), { _isParam: false, _methods: Object.create(null), _children: Object.create(null), _path: '/' });
       tree['root']._methods[method.toLowerCase()] = '/';
     }
   }
@@ -122,12 +129,16 @@ function generateApiObject(endpoints) {
   function renderTree(node, indent = '  ') {
     let result = '';
     
+    const isValidIdentifier = (key) => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key);
+    
     for (const [key, val] of Object.entries(node)) {
+      const formattedKey = isValidIdentifier(key) ? key : `"${key}"`;
+      
       if (val._isParam) {
-        result += `${indent}${key}: (${key}) => ({\n`;
+        result += `${indent}${formattedKey}: (${key}) => ({\n`;
         
         for (const [m, p] of Object.entries(val._methods)) {
-          const templatedPath = p.replace(/:([a-zA-Z0-9_]+)/g, '${$1}');
+          const templatedPath = p.replace(/:([a-zA-Z0-9_$]+)/g, '${encodeURIComponent($1)}');
           result += `${indent}  ${m}: (data) => request('${m}', \`${templatedPath}\`, data),\n`;
         }
         
@@ -138,7 +149,7 @@ function generateApiObject(endpoints) {
         
         result += `${indent}}),\n`;
       } else {
-        result += `${indent}${key}: {\n`;
+        result += `${indent}${formattedKey}: {\n`;
         for (const [m, p] of Object.entries(val._methods)) {
            result += `${indent}  ${m}: (data) => request('${m}', '${p}', data),\n`;
         }

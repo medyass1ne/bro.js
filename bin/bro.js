@@ -9,7 +9,6 @@ register();
 
 import { createServer } from '../src/server.js';
 import { colors, printBanner, printRoute, printHotReload } from '../src/logger.js';
-import { scanTasks } from '../src/tasks.js';
 import { generateSDK } from '../src/sdk.js';
 import dotenv from 'dotenv';
 import chokidar from 'chokidar';
@@ -128,7 +127,7 @@ if (command === 'init') {
 
 if (['sdk', 'generate-client', 'client'].includes(command)) {
   generateSDK().then(() => {
-    console.log(`\n  ${colors.green} bro-client.js generated successfully!${colors.reset}\n`);
+    console.log(`\n  ${colors.green} bro-sdk.js generated successfully!${colors.reset}\n`);
     process.exit(0);
   }).catch(err => {
     console.error(`\n  ${colors.red} Error generating SDK:${colors.reset}`, err.message);
@@ -188,6 +187,7 @@ async function bootstrap() {
       console.error("");
       process.exit(1);
     }
+    globalConfig.envData = envResult.data;
   }
 
   if (!fs.existsSync(routesDir)) {
@@ -197,7 +197,7 @@ async function bootstrap() {
   }
 
   const localeDir = globalConfig.locale?.directory || path.join(cwd, 'locale');
-  const { app, server, routes: initialRoutes, reload, reloadLocale, io } = await createServer(globalConfig, routesDir, db);
+  const { app, server, routes: initialRoutes, reload, reloadLocale, io, shutdown } = await createServer(globalConfig, routesDir, db);
   const port = globalConfig.port;
   
   let currentRoutes = initialRoutes;
@@ -209,8 +209,6 @@ async function bootstrap() {
     } else if (command === 'start') {
       console.log(`[bro.js] Server running in production on port ${port}`);
     }
-    
-    await scanTasks({ db, io });
     
     if (command === 'dev') {
       const printCurrentRoutes = (routesToPrint) => {
@@ -249,6 +247,16 @@ async function bootstrap() {
         }
       });
     }
+
+    const handleShutdown = async (signal) => {
+      console.log(`\n[bro.js] Received ${signal}. Shutting down gracefully...`);
+      await shutdown();
+      console.log('[bro.js] HTTP server closed.');
+      process.exit(0);
+    };
+
+    process.on('SIGINT', () => handleShutdown('SIGINT'));
+    process.on('SIGTERM', () => handleShutdown('SIGTERM'));
   });
 }
 
