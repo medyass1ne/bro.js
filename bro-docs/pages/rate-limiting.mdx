@@ -38,3 +38,7 @@ export default defineRoute({
   }
 });
 ```
+
+## Smart Distributed Rate Limiting
+
+If you define a `redisUrl` in your `bro.config.js`, `bro.js` automatically upgrades both your global and route-specific rate limiters. Instead of using in-memory tracking (which fails across multiple server instances), it seamlessly deploys a lightning-fast distributed rate limiter using atomic Redis `INCR` and `EXPIRE` operations. Zero extra configuration required!

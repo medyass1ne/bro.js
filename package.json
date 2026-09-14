@@ -1,6 +1,6 @@
 {
   "name": "bro-framework",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "description": "The No-BS Backend Framework for Node.js",
   "repository": {
     "type": "git",
@@ -27,14 +27,17 @@
   ],
   "dependencies": {
     "@scalar/express-api-reference": "^0.10.18",
+    "@socket.io/redis-adapter": "^8.3.0",
     "chokidar": "^5.0.0",
     "cors": "^2.8.6",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.3.0",
     "node-cron": "^4.6.0",
+    "redis": "^6.2.1",
     "socket.io": "^4.8.3",
     "tsx": "^4.23.13",
     "zod": "^3.23.8",
@@ -43,6 +46,7 @@
   "keywords": [
     "bro",
     "brojs",
+    "bro.js",
     "bro-framework",
     "framework",
     "backend",
@@ -84,5 +88,8 @@
     "ai-friendly",
     "developer-experience",
     "dx"
-  ]
+  ],
+  "devDependencies": {
+    "ioredis-mock": "^8.13.1"
+  }
 }

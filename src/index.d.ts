@@ -2,6 +2,18 @@ import { z, ZodTypeAny } from 'zod';
 
 type InferZod<T> = T extends ZodTypeAny ? z.infer<T> : any;
 
+export interface UploadedFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  destination?: string;
+  filename?: string;
+  path?: string;
+  buffer?: Buffer;
+}
+
 export interface BroContext<Body = any, Params = any, Query = any> {
   env?: any;
   jwt?: { sign: (payload: any, options?: any) => string };
@@ -11,19 +23,22 @@ export interface BroContext<Body = any, Params = any, Query = any> {
   user?: any;
   db?: any;
   io?: any;
-  files?: any[];
+  file?: UploadedFile;
+  files?: UploadedFile[] | Record<string, UploadedFile[]>;
   locale: string;
   t: (key: string, values?: Record<string, unknown>) => string;
   error?: any;
+  redis?: any;
 }
 
 export interface RouteConfig<Body = any, Params = any, Query = any> {
-  auth?: boolean;
+  auth?: boolean | string[] | 'api-key';
   upload?: boolean | { limits?: any, fields?: { name: string, maxCount?: number }[], single?: string, array?: string, fileFilter?: any, storage?: any };
   body?: Body;
   params?: Params;
   query?: Query;
   response?: ZodTypeAny;
+  cache?: number;
   rateLimit?: {
     windowMs: number;
     max: number;
@@ -48,6 +63,7 @@ export interface BroConfig {
   server?: {
     port?: number;
     cors?: boolean | object;
+    helmet?: boolean | object;
   };
   locale?: {
     directory?: string;
@@ -56,6 +72,7 @@ export interface BroConfig {
   auth?: {
     jwtSecret?: string;
     expiresIn?: string | number;
+    apiKey?: string | string[];
   };
   docs?: boolean | { auth?: { user: string; pass: string } };
   rateLimit?: {
@@ -73,6 +90,7 @@ export interface BroConfig {
   db?: () => Promise<any> | any;
   sockets?: (io: any, db: any) => Promise<void> | void;
   onShutdown?: (db: any) => Promise<void> | void;
+  redisUrl?: string;
 }
 
 export function defineConfig(config: BroConfig): BroConfig;

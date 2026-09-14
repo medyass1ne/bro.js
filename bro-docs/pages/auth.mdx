@@ -26,3 +26,40 @@ export default defineRoute({
 ```
 
 When a user sends a request, `bro.js` automatically checks for an `Authorization: Bearer <token>` header, verifies it using your configured `jwtSecret`, and injects the decoded payload into `ctx.user`.
+
+## Role-Based Access Control (RBAC)
+
+Need to restrict an endpoint to specific roles? Just pass an array of allowed roles to `auth`:
+
+```javascript
+export default defineRoute({
+  auth: ['admin', 'moderator'],
+  handler: async ({ user }) => {
+    // bro.js already verified the JWT AND checked that user.role is allowed!
+    return { success: true };
+  }
+});
+```
+
+## API Key Authentication
+
+Sometimes you want service-to-service communication without JWTs. Set `auth: 'api-key'` to enforce a strict check against the `x-api-key` header. 
+
+By default, it checks against `process.env.API_KEY`. However, you can configure an array of valid keys in your `bro.config.js` to enable zero-downtime key rotation:
+
+```javascript
+// bro.config.js
+export default defineConfig({
+  auth: { apiKey: ['old-key', 'new-key'] }
+});
+```
+
+```javascript
+// routes/protected.get.js
+export default defineRoute({
+  auth: 'api-key',
+  handler: async () => {
+    return { success: true, message: "Valid API key provided." };
+  }
+});
+```

@@ -4,5 +4,6 @@
 /bro-docs/node_modules
 /test
 /routes
+/scratch
 bro-sdk.js
 bro.config.js

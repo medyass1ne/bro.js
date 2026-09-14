@@ -21,12 +21,16 @@ export default defineConfig({
 
   server: {
     port: 5000,
-    cors: true 
+    cors: true,
+    helmet: true // Disable or pass helmet options
   },
+  
+  redisUrl: process.env.REDIS_URL, // e.g., 'redis://localhost:6379'
 
   auth: {
     jwtSecret: process.env.JWT_SECRET || 'dev_secret_please_change',
-    expiresIn: '7d'
+    expiresIn: '7d',
+    apiKey: process.env.API_KEY || ['dev_key_1', 'dev_key_2'] // Supports arrays for rotation
   },
   
   docs: process.env.NODE_ENV !== 'production',
@@ -86,3 +90,9 @@ export default defineConfig({
   }
 });
 ```
+
+## Redis Integration
+Setting a `redisUrl` will automatically connect a Redis client, inject it into `ctx.redis`, auto-scale your WebSockets via the adapter, and upgrade your rate limiters and route caching to use distributed Redis stores instantly!
+
+### Testing Mode
+If you are running integration tests (i.e. `NODE_ENV=test`) and omit the `redisUrl`, the framework automatically mounts an in-memory `ioredis-mock` instance. This allows your CI pipelines to safely test distributed caching and rate limiters without needing a live Redis server. (Note: Ensure `ioredis-mock` is installed as a `devDependency`).

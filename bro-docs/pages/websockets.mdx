@@ -45,3 +45,9 @@ export default defineRoute({
   }
 });
 ```
+
+## Auto-Scaling with Redis
+
+If you run multiple instances of your API behind a load balancer, standard WebSockets will fail because clients might connect to different nodes. 
+
+With `bro.js`, just set `redisUrl` in your `bro.config.js`. The engine will automatically detect Redis and seamlessly configure `@socket.io/redis-adapter` for you. Your real-time events will instantly broadcast across your entire cluster with absolutely zero boilerplate!

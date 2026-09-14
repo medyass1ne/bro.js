@@ -83,3 +83,17 @@ export default defineRoute({
   }
 });
 ```
+
+## Zero-Config Route Caching
+
+If you've connected Redis via `bro.config.js` (using `redisUrl`), you can trivially cache any endpoint by adding a `cache: <seconds>` property. The framework will instantly intercept identical requests and serve the response straight from Redis, completely bypassing your handler!
+
+```typescript
+export default defineRoute({
+  cache: 60, // Cache this response in Redis for 60 seconds
+  handler: async ({ db }) => {
+    // This heavy query will only run once per minute!
+    return await db.collection('heavyStats').aggregate(...);
+  }
+});
+```

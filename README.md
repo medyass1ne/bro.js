@@ -99,8 +99,9 @@ Create a `.js` file in the `routes/` directory, and it automatically becomes an 
 ### Bouncer-Grade Validation
 Powered by Zod. Attach a schema to `body`, `query`, or `params` directly in your route definition. If the client sends malformed data, `bro.js` automatically rejects the request with a structured `400 Bad Request` JSON payload *before* your handler ever executes. You never have to manually validate inputs again. You can also define a `response` schema to strongly type your OpenAPI documentation (strictly opt-in; arbitrary 200s work out of the box).
 
-### Zero-Config JWTs
+### Zero-Config Auth (JWTs, RBAC, API Keys)
 Add `auth: true` to your route config. `bro.js` will intercept the request, extract the `Authorization: Bearer <token>` header, verify the signature using your `jwtSecret`, and inject the decoded payload directly into `ctx.user`.
+You can also use Role-Based Access Control by passing an array of roles (e.g. `auth: ['admin']`) or enforce strict service-to-service communication by using `auth: 'api-key'`. API Keys fully support zero-downtime rotation by accepting an array of valid keys in `bro.config.js`.
 
 ### Context Injection
 Stop importing singleton database connections and socket instances into every file. Define your `db` and `sockets` setup once in `bro.config.js`. `bro.js` orchestrates the initialization and injects both instances directly into the `ctx` object for every request handler.
@@ -185,6 +186,8 @@ The locale is negotiated dynamically using RFC 9110 `Accept-Language` headers, s
 | **API Reference** | Scalar | Auto-generated, interactive Swagger/OpenAPI documentation. |
 | **Task Scheduler** | node-cron | Reliable internal background task orchestration. |
 | **File Parsing** | multer | Zero-boilerplate `multipart/form-data` file extraction. |
+| **Caching & Scaling** | Redis | Optional zero-config route caching, distributed rate-limiting, and WebSocket scaling. |
+| **Security** | Helmet | Auto-configured industry-standard HTTP security headers. |
 
 ---
 
