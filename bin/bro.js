@@ -274,6 +274,12 @@ async function bootstrap() {
 
 if (command === 'dev' || command === 'start') {
   bootstrap();
-} else {
-  console.log(`Usage: bro dev | bro start | bro init`);
+} else if (!['sdk', 'generate-client', 'client', 'init'].includes(command)) {
+  console.log(`\n  ${colors.bold}${colors.green}bro.js CLI${colors.reset}\n`);
+  console.log(`  ${colors.bold}Usage:${colors.reset} bro <command>\n`);
+  console.log(`  ${colors.bold}Commands:${colors.reset}`);
+  console.log(`    ${colors.cyan}dev${colors.reset}      Start the development server with hot-reload`);
+  console.log(`    ${colors.cyan}start${colors.reset}    Start the production server gracefully`);
+  console.log(`    ${colors.cyan}init${colors.reset}     Scaffold a new bro.config.js workspace`);
+  console.log(`    ${colors.cyan}sdk${colors.reset}      Generate a typed frontend client\n`);
 }
