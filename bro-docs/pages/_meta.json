@@ -1,18 +1,33 @@
 {
   "index": "Introduction",
   "getting-started": "Getting Started",
+  "config": "Configuration & Env",
+
+  "-- Core": {
+    "type": "separator",
+    "title": "Core Architecture"
+  },
   "routing": "File-Based Routing",
-  "context": "Execution Context",
-  "localization": "File-Based Locale",
   "validation": "Zod Validation",
+  "context": "Execution Context",
   "auth": "Authentication & JWT",
+
+  "-- Features": {
+    "type": "separator",
+    "title": "Features & Data"
+  },
   "database": "Database Injection",
   "websockets": "WebSockets (Socket.io)",
   "uploads": "File Uploads",
   "rate-limiting": "Rate Limiting",
+  "localization": "File-Based Locale",
   "tasks": "Background Tasks (CRON)",
+
+  "-- Tooling": {
+    "type": "separator",
+    "title": "Tooling & Docs"
+  },
   "sdk": "Auto-Generated SDK",
   "docs": "Live API Docs (Scalar)",
-  "config": "Configuration & Env",
   "cli": "CLI Reference"
 }
