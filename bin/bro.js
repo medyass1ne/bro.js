@@ -29,13 +29,15 @@ export default defineConfig({
   // Server Settings
   server: {
     port: 5000,
-    cors: true // Set to true to allow all, or pass a CORS options object
+    cors: true, // Set to true to allow all, or pass a CORS options object
+    helmet: true // Enable security headers
   },
 
   // Authentication Settings
   auth: {
     jwtSecret: 'dev_secret_please_change',
-    expiresIn: '7d'
+    expiresIn: '7d',
+    apiKey: process.env.API_KEY || ['dev_key_1', 'dev_key_2'] // Supports array for zero-downtime rotation
   },
 
   // Optional file-based API translations
@@ -52,6 +54,9 @@ export default defineConfig({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100 // limit each IP to 100 requests per windowMs
   },
+
+  // Redis Configuration (Auto-scales WebSockets, distributed caches & rate-limiting)
+  redisUrl: process.env.REDIS_URL, // e.g., 'redis://localhost:6379'
 
   // WebSockets Setup
   sockets: async (io, db) => {
@@ -79,6 +84,11 @@ export default defineConfig({
     // return mongoose.connection; 
     // --------------------------
     return null;
+  },
+
+  // Graceful Teardown Hook
+  onShutdown: async (db) => {
+    // Close application-owned database resources gracefully here
   }
 });
 `;

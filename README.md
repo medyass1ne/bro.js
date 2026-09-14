@@ -27,8 +27,11 @@
 ## Table of Contents
 
 - [Getting Started](#getting-started)
+- [Configuration](#configuration)
 - [The Core Experience](#the-core-experience)
 - [Deep-Dive Features](#deep-dive-features)
+- [Route Reference](#route-reference)
+- [Context Reference](#context-reference)
 - [Architecture & Request Lifecycle](#architecture--request-lifecycle)
 - [Tech Stack Breakdown](#tech-stack-breakdown)
 - [CLI Reference](#cli-reference)
@@ -47,6 +50,38 @@ npm run dev
 ```
 
 That's it! Your zero-boilerplate backend is now running with hot-reloading enabled.
+
+## Configuration
+
+Configuration lives in `bro.config.js`:
+
+```javascript
+import { defineConfig } from 'bro-framework';
+
+export default defineConfig({
+  server: { port: 5000, cors: true, helmet: true },
+  auth: {
+    jwtSecret: process.env.JWT_SECRET,
+    expiresIn: '7d',
+    apiKey: process.env.API_KEY
+  },
+  locale: { directory: './locale', defaultLocale: 'en' },
+  rateLimit: { windowMs: 15 * 60 * 1000, max: 100 },
+  docs: process.env.NODE_ENV !== 'production',
+  redisUrl: process.env.REDIS_URL,
+  db: async () => {
+    // Initialize database connection here
+  },
+  sockets: async (io, db) => {
+    // Setup Socket.IO event listeners here
+  },
+  onShutdown: async (db) => {
+    // Close application-owned database resources here.
+  }
+});
+```
+
+`cors: false` disables HTTP CORS middleware. Helmet is enabled by default and can be disabled with `helmet: false`. Redis is optional; when configured it powers distributed rate limiting, route caching, and Socket.IO scaling. In `NODE_ENV=test`, bro.js can inject `ioredis-mock`; install it in the consuming project's development dependencies.
 
 ---
 
@@ -67,6 +102,13 @@ export default defineRoute({
   body: z.object({
     title: z.string().min(5),
     content: z.string()
+  }),
+  query: z.object({
+    draft: z.coerce.boolean().default(false)
+  }),
+  response: z.object({
+    success: z.boolean(),
+    updated: z.number()
   }),
   handler: async ({ body, params, user, db, io }) => {
     // 1. Data is already validated. user is already authenticated.
@@ -89,6 +131,8 @@ export default defineRoute({
 });
 ```
 
+Validation schemas are flat and must be declared directly as `body`, `params`, and `query`. The deprecated nested `schema: { body, params, query }` form is rejected during route loading. The optional `response` schema documents the successful JSON response in OpenAPI; it does not runtime-validate handler output.
+
 ---
 
 ## Deep-Dive Features
@@ -101,22 +145,47 @@ Powered by Zod. Attach a schema to `body`, `query`, or `params` directly in your
 
 ### Zero-Config Auth (JWTs, RBAC, API Keys)
 Add `auth: true` to your route config. `bro.js` will intercept the request, extract the `Authorization: Bearer <token>` header, verify the signature using your `jwtSecret`, and inject the decoded payload directly into `ctx.user`.
-You can also use Role-Based Access Control by passing an array of roles (e.g. `auth: ['admin']`) or enforce strict service-to-service communication by using `auth: 'api-key'`. API Keys fully support zero-downtime rotation by accepting an array of valid keys in `bro.config.js`.
+You can also use Role-Based Access Control by passing an array of roles (e.g. `auth: ['admin']`) or enforce service-to-service communication with `auth: 'api-key'`. API keys are read from `auth.apiKey` or `API_KEY` and support zero-downtime rotation with an array:
+
+```javascript
+auth: {
+  apiKey: ['current-key', 'next-key']
+}
+```
+
+Clients send the selected key in the `x-api-key` header. API-key routes are represented as `apiKeyAuth` operations in OpenAPI.
 
 ### Context Injection
 Stop importing singleton database connections and socket instances into every file. Define your `db` and `sockets` setup once in `bro.config.js`. `bro.js` orchestrates the initialization and injects both instances directly into the `ctx` object for every request handler.
+
+### Redis Caching and Lifecycle
+Set `redisUrl` to enable distributed rate limiting, route caching, and Socket.IO pub/sub scaling. Add `cache: 60` to a route to cache its JSON response for 60 seconds. Cache keys include the request URL, resolved locale, and authorization/API-key identity; do not cache responses with dimensions that are not represented in the key.
+
+The programmatic `createServer()` API returns `shutdown()`. It stops scheduled tasks, closes Socket.IO, closes Redis clients, runs the optional `onShutdown(db)` hook, and closes the HTTP server. The CLI calls it automatically on `SIGINT` and `SIGTERM`.
 
 ### Zero-YAML Live Documentation
 If you've ever hand-written OpenAPI YAML, you know the pain. `bro.js` parses your Zod schemas and automatically serves a stunning, interactive [Scalar](https://scalar.com/) API playground at `/docs`. It's highly secure: by default, these internal docs are disabled in production mode.
 
 ### The Frontend SDK Generator
-Tired of writing frontend `fetch` wrappers? Run `bro sdk`. The CLI will parse your backend routes and compile a `bro-sdk.js` file for your frontend. It features built-in token management, request stringification, and type-safe deep tree traversal (e.g., `api.users.id("123").post(data)`).
+Tired of writing frontend `fetch` wrappers? Run `bro sdk`. The CLI parses your backend routes and compiles a JavaScript `bro-sdk.js` file. It includes token and locale headers, query serialization, URL-encoded dynamic parameters, and deep tree traversal (e.g., `api.users.id("123").get()`). Configure it with `setBaseURL()`, `setTokenKey()`, and `setLocale()`.
 
 ### Background Task Scheduler
 Don't spin up a separate worker server. Drop a JavaScript file anywhere in the `tasks/` folder, export a cron string (e.g., `"0 0 * * *"`), and an async handler. `bro.js` natively schedules it as a background worker with full access to your injected database and WebSocket contexts.
 
 ### Zero-Boilerplate File Uploads
-Add `upload: true` to a route. `bro.js` automatically hooks into `multer`, parses the `multipart/form-data` payload in memory, and injects the files directly into `ctx.files`. It also natively supports granular file limits, restricting max sizes, parts, and fielding counts instantly to protect your RAM. (Note: Use the `storage` configuration for heavy production disk writing to prevent memory exhaustion).
+Add `upload: true` to a route. bro.js uses Multer to parse `multipart/form-data` and inject files into the context. Use `single`, `array`, or `fields` for explicit field handling:
+
+```javascript
+export default defineRoute({
+  upload: {
+    single: 'avatar',
+    limits: { fileSize: 5 * 1024 * 1024 }
+  },
+  handler: ({ file }) => ({ name: file?.originalname })
+});
+```
+
+`ctx.file` is used by `single()`. `ctx.files` is an array for `array()` or a field-to-array object for `fields()`. Defaults include limits for file size, file count, fields, parts, and field size. Use `storage` for production disk/object-storage integration instead of retaining large buffers in memory.
 
 ### File-Based Locale
 Create a `locale/` folder with one translation file per locale, such as `locale/en.js` and `locale/fr.js`. Export a plain object from each file, then use `t()` in any route:
@@ -132,6 +201,46 @@ export default defineRoute({
 ```
 
 The locale is negotiated dynamically using RFC 9110 `Accept-Language` headers, supporting full region fallback and custom defaults, and the generated SDK can securely set it via `setLocale('fr')`.
+
+## Route Reference
+
+| Option | Type | Purpose |
+| :--- | :--- | :--- |
+| `auth` | `boolean \| string[] \| 'api-key'` | JWT, role, or API-key protection. |
+| `body` | Zod schema | Validates JSON request bodies. |
+| `params` | Zod schema | Validates URL parameters. |
+| `query` | Zod schema | Validates query-string values. |
+| `response` | Zod schema | Documents successful JSON output in OpenAPI. |
+| `cache` | number | Redis response-cache duration in seconds. |
+| `rateLimit` | `{ windowMs, max }` | Route-specific request limiting. |
+| `upload` | boolean or options | Enables Multer parsing and limits. |
+| `summary` | string | OpenAPI operation summary. |
+
+Dynamic route files use bracket parameters such as `routes/users/[id].get.js`. Nested dynamic directories are supported. HTTP method suffixes are `get`, `post`, `put`, `delete`, `patch`, `options`, and `head`.
+
+## Context Reference
+
+Handlers receive:
+
+| Property | Description |
+| :--- | :--- |
+| `body` | Validated body data. |
+| `params` | Validated path parameters. |
+| `query` | Validated query data. |
+| `user` | Decoded JWT payload when JWT auth is used. |
+| `db` | Value returned by `config.db`. |
+| `io` | Socket.IO server instance. |
+| `redis` | Redis client when Redis is enabled or test mode is active. |
+| `file` | Single uploaded file from `upload.single()`. |
+| `files` | Array or field map from `array()`/`fields()`. |
+| `locale` | Resolved request locale. |
+| `t` | Translation function, `t(key, values)`. |
+| `jwt` | Configured JWT signing helper. |
+| `env` | Parsed environment data when configured, otherwise `process.env`. |
+
+## Testing
+
+For Redis-backed integration tests without an external Redis server, install `ioredis-mock` in the consuming project and run with `NODE_ENV=test`. bro.js injects a mock Redis client and exercises cache, rate-limit, Socket.IO adapter, and shutdown paths.
 
 ---
 
