@@ -1,0 +1,69 @@
+---
+title: Next.js Integration
+description: Learn how to use bro.js natively inside your Next.js App Router API routes.
+---
+
+# Next.js Integration
+
+You can now use `bro.js` natively inside your Next.js App Router! The `bro-framework/next` adapter allows you to reuse your Zod validation, authentication logic, and database connections directly in your Next.js API endpoints (`app/api/.../route.ts`).
+
+## Getting Started
+
+Because Next.js runs in a Serverless or Edge environment, we use a "Factory Pattern" to initialize the framework just once per serverless instance.
+
+Create a shared file in your project, for example `lib/bro.ts`:
+
+```typescript
+import { createBro } from 'bro-framework/next';
+// Import your database connection, if you have one
+import db from './db'; 
+
+export const { defineRoute, z } = createBro({
+  auth: { 
+    jwtSecret: process.env.JWT_SECRET,
+    apiKey: process.env.API_KEY 
+  },
+  db: db,
+  redisUrl: process.env.REDIS_URL
+});
+```
+
+Now, in any Next.js API route (`app/api/hello/route.ts`), simply import your configured `defineRoute` and use it exactly like you would in standard `bro.js`:
+
+```typescript
+import { defineRoute, z } from '@/lib/bro';
+
+export const POST = defineRoute({
+  auth: true, // Automatically uses your JWT secret!
+  body: z.object({
+    message: z.string().min(2)
+  }),
+  handler: async ({ body, user, db, req }) => {
+    // Save to database, return JSON response!
+    await db.save(body.message, user.id);
+    return { success: true, message: body.message };
+  }
+});
+```
+
+## What's Included?
+
+The Next.js adapter brings the most important parts of `bro.js` to the Edge:
+- **Zod Validation**: Automatically validates `body`, `query`, and `params`. If validation fails, it instantly returns a `400 Bad Request` with the exact issues.
+- **Authentication**: Native support for JWT Bearer tokens and API Keys (including role-based access).
+- **Database & Redis Injection**: Lazily loads your database and Redis connections and injects them into every handler.
+- **File Uploads**: Natively parses `multipart/form-data` and injects `ctx.file` and `ctx.files` natively using Next.js `File` objects.
+
+## Capabilities & Limitations (The Gaps)
+
+Because Next.js API routes are "Serverless" (meaning they only wake up when a user visits them and then go back to sleep), the adapter cannot support features that require a constantly running server.
+
+To keep things simple, here is a list of features that are **only available in the core `bro.js` Express framework**, and *not* in the Next.js adapter:
+
+1. **WebSockets (Socket.IO)**: WebSockets require a constantly open connection between the client and a running server. Serverless functions cannot keep connections open forever, so Socket.IO is disabled.
+2. **Background Tasks (Cron Jobs)**: Background tasks require a server to be constantly ticking in the background. Since Next.js routes go to sleep, cron jobs will not run here.
+3. **Caching & Rate Limiting**: Next.js has its own built-in caching (`fetch` cache) and edge rate-limiting solutions (like Vercel KV), so the adapter relies on Next.js for these features instead of the core framework's Redis limiters.
+4. **Auto-Generated Docs (OpenAPI / Scalar)**: The adapter does not currently generate the interactive `/docs` UI.
+5. **Graceful Shutdown**: Serverless functions don't have a "shutdown" phase, so the `onShutdown` hook is ignored.
+
+If you need WebSockets, cron jobs, or auto-generated documentation, you should use the standard `bro.js` framework by running `npx bro init`!

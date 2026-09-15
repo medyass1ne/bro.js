@@ -35,6 +35,7 @@
 - [Architecture & Request Lifecycle](#architecture--request-lifecycle)
 - [Tech Stack Breakdown](#tech-stack-breakdown)
 - [CLI Reference](#cli-reference)
+- [Next.js App Router Integration](#nextjs-app-router-integration)
 - [Author & License](#author--license)
 
 ---
@@ -309,9 +310,36 @@ For Redis-backed integration tests without an external Redis server, install `io
 | `bro init` | Automated workspace scaffolder. Generates configuration files and forcefully ensures your `package.json` respects `"type": "module"`. |
 | `bro sdk` | Route parser and browser client compiler. Generates your typed `bro-sdk.js` frontend SDK in one hit. |
 
+## Next.js App Router Integration
+
+You can natively use `bro.js` syntax, Zod validation, and Authentication inside your Next.js API routes (`app/api/.../route.ts`)!
+
+First, create your factory instance (e.g., `lib/bro.ts`):
+```typescript
+import { createBro } from 'bro-framework/next';
+
+export const { defineRoute, z } = createBro({
+  auth: { apiKey: process.env.API_KEY }
+});
+```
+
+Then use it seamlessly in your route files:
+```typescript
+import { defineRoute, z } from '@/lib/bro';
+
+export const POST = defineRoute({
+  body: z.object({ name: z.string() }),
+  handler: async ({ body }) => {
+    return { success: true, hello: body.name };
+  }
+});
+```
+
+> **Capabilities & Limitations**: Because Next.js API routes are "Serverless" (meaning they sleep when not actively processing a request), features that require a constantly running server such as **WebSockets**, **Background Tasks (Cron)**, **Rate Limiting**, and **Auto-generated Docs** are strictly limited to the standalone `bro.js` framework and are not available in the Next.js adapter.
+
 ---
 
 ## Author & License
 
-- **Author**: Yessin (@medyass1ne)
+- **Author**: Yass1n (@medyass1ne)
 - **License**: MIT
