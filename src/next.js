@@ -89,7 +89,6 @@ export function createBro(globalConfig = {}) {
     let messages = globalConfig.locales?.[locale] || globalConfig.locales?.[globalConfig.defaultLocale || 'en'];
     if (!messages) return key;
 
-    // Handle Webpack / ES module JSON interop where the object is under .default
     if (messages.default && typeof messages.default === 'object') {
       messages = messages.default;
     }
@@ -115,7 +114,6 @@ export function createBro(globalConfig = {}) {
 
         const resolvedLocale = resolveLocale(Object.fromEntries(req.headers.entries()));
 
-        // Auth extraction early for Identity caching
         let user = null;
         let apiKeyUsed = null;
         if (config.auth) {
@@ -161,7 +159,6 @@ export function createBro(globalConfig = {}) {
           }
         }
 
-        // Rate Limiting
         const activeRateLimit = config.rateLimit === false ? null : (config.rateLimit || globalConfig.rateLimit);
         if (activeRateLimit) {
           const ip = req.headers.get('x-forwarded-for') || 'ip';
@@ -193,7 +190,6 @@ export function createBro(globalConfig = {}) {
           }
         }
 
-        // Caching
         let cacheKey = null;
         if (config.cache && req.method === 'GET') {
           const urlObj = new URL(req.url);
