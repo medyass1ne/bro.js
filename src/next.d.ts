@@ -12,11 +12,14 @@ export interface UploadedFile {
 }
 
 export interface NextBroGlobalConfig<TDb = any> {
-  locale?: any;
+  env?: ZodTypeAny;
+  locales?: Record<string, any>;
+  defaultLocale?: string;
   redisUrl?: string;
   auth?: {
     jwtSecret?: string;
     apiKey?: string | string[];
+    expiresIn?: string | number;
   };
   db?: TDb | Promise<TDb> | (() => TDb | Promise<TDb>) | { init: () => TDb | Promise<TDb> };
 }
@@ -44,6 +47,11 @@ export interface NextRouteConfig<TBody = any, TQuery = any, TParams = any, TDb =
   body?: TBody;
   query?: TQuery;
   params?: TParams;
+  cache?: number;
+  rateLimit?: { windowMs: number; max: number; };
+  response?: ZodTypeAny;
+  summary?: string;
+  upload?: any;
   handler: (ctx: NextRouteContext<TBody, TQuery, TParams, TDb>) => Promise<any> | any;
 }
 

@@ -3,7 +3,7 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 import crypto from 'node:crypto';
 
-const LOCALE_EXTENSIONS = new Set(['.js', '.mjs', '.ts']);
+const LOCALE_EXTENSIONS = new Set(['.js', '.mjs', '.ts', '.json']);
 
 function localeFromFilename(fileName) {
 	return path.basename(fileName, path.extname(fileName));

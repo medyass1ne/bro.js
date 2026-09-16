@@ -1,6 +1,6 @@
 {
   "name": "bro-framework",
-  "version": "2.4.3",
+  "version": "2.4.4",
   "description": "The No-BS Backend Framework for Node.js",
   "repository": {
     "type": "git",

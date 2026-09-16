@@ -157,7 +157,6 @@ export async function loadRoutes(app, routesDir, createHandler, openApiSpec) {
         }
       }
       
-      // Auto-inject security definition if auth is true
       if (config.auth === 'api-key') {
         operation.security = [{ apiKeyAuth: [] }];
       } else if (config.auth) {
