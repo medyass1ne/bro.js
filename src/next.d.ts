@@ -16,6 +16,7 @@ export interface NextBroGlobalConfig<TDb = any> {
   locales?: Record<string, any>;
   defaultLocale?: string;
   redisUrl?: string;
+  rateLimit?: { windowMs: number; max: number; };
   auth?: {
     jwtSecret?: string;
     apiKey?: string | string[];
@@ -48,7 +49,7 @@ export interface NextRouteConfig<TBody = any, TQuery = any, TParams = any, TDb =
   query?: TQuery;
   params?: TParams;
   cache?: number;
-  rateLimit?: { windowMs: number; max: number; };
+  rateLimit?: { windowMs: number; max: number; } | false;
   response?: ZodTypeAny;
   summary?: string;
   upload?: any;

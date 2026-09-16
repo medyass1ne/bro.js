@@ -407,7 +407,12 @@ export async function createServer(globalConfig, routesDir, db) {
 
   const initialRoutes = await reload();
 
-  const taskManager = await scanTasks({ db, io });
+  let taskManager = await scanTasks({ db, io });
+
+  const reloadTasks = async () => {
+    if (taskManager) taskManager.stopAll();
+    taskManager = await scanTasks({ db, io });
+  };
 
   let isShuttingDown = false;
   const shutdown = async () => {
@@ -434,5 +439,5 @@ export async function createServer(globalConfig, routesDir, db) {
     });
   };
 
-  return { app, server, routes: initialRoutes, reload, reloadLocale, io, shutdown };
+  return { app, server, routes: initialRoutes, reload, reloadLocale, reloadTasks, io, shutdown };
 }

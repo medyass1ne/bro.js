@@ -10,8 +10,12 @@ export function createBro(globalConfig = {}) {
   let initPromise = null;
 
   let globalDb = null;
-  let globalRedis = null;
   let globalLocale = null;
+  
+  const globalStore = globalThis;
+  globalStore.__broRedis = globalStore.__broRedis || null;
+  globalStore.__broMemoryCache = globalStore.__broMemoryCache || new Map();
+  globalStore.__broMemoryRateLimit = globalStore.__broMemoryRateLimit || new Map();
 
   async function ensureInitialized() {
     if (isInitialized) return;
@@ -38,10 +42,10 @@ export function createBro(globalConfig = {}) {
         }
 
         if (globalConfig.redisUrl) {
-          globalRedis = createClient({ url: globalConfig.redisUrl });
-          globalRedis.on('error', (err) => console.error('[bro.js/next] Redis Error:', err));
-          if (globalRedis.status === 'wait' || !globalRedis.status) {
-             await globalRedis.connect().catch(err => {
+          globalStore.__broRedis = createClient({ url: globalConfig.redisUrl });
+          globalStore.__broRedis.on('error', (err) => console.error('[bro.js/next] Redis Error:', err));
+          if (!globalStore.__broRedis.isOpen) {
+             await globalStore.__broRedis.connect().catch(err => {
                 if (!err.message.includes('already connecting') && !err.message.includes('already connected')) {
                   throw err;
                 }
@@ -82,8 +86,13 @@ export function createBro(globalConfig = {}) {
   };
 
   const translate = (locale, key, values = {}) => {
-    const messages = globalConfig.locales?.[locale] || globalConfig.locales?.[globalConfig.defaultLocale || 'en'];
+    let messages = globalConfig.locales?.[locale] || globalConfig.locales?.[globalConfig.defaultLocale || 'en'];
     if (!messages) return key;
+
+    // Handle Webpack / ES module JSON interop where the object is under .default
+    if (messages.default && typeof messages.default === 'object') {
+      messages = messages.default;
+    }
 
     const message = key.split('.').reduce((acc, part) => acc && acc[part], messages);
     if (!message || typeof message !== 'string') return key;
@@ -153,29 +162,58 @@ export function createBro(globalConfig = {}) {
         }
 
         // Rate Limiting
-        if (config.rateLimit && globalRedis) {
+        const activeRateLimit = config.rateLimit === false ? null : (config.rateLimit || globalConfig.rateLimit);
+        if (activeRateLimit) {
           const ip = req.headers.get('x-forwarded-for') || 'ip';
           const urlObj = new URL(req.url);
           const rlKey = `rate-limit:${urlObj.pathname}:${ip}`;
-          const currentCount = await globalRedis.incr(rlKey);
-          if (currentCount === 1) {
-            await globalRedis.expire(rlKey, Math.ceil(config.rateLimit.windowMs / 1000));
-          }
-          if (currentCount > config.rateLimit.max) {
-            return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 });
+          
+          if (globalStore.__broRedis) {
+            const currentCount = await globalStore.__broRedis.incr(rlKey);
+            if (currentCount === 1) {
+              await globalStore.__broRedis.expire(rlKey, Math.ceil(activeRateLimit.windowMs / 1000));
+            }
+            if (currentCount > activeRateLimit.max) {
+              return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 });
+            }
+          } else {
+            const now = Date.now();
+            let record = globalStore.__broMemoryRateLimit.get(rlKey);
+            
+            if (!record || now > record.expires) {
+              record = { count: 0, expires: now + activeRateLimit.windowMs };
+            }
+            
+            record.count++;
+            globalStore.__broMemoryRateLimit.set(rlKey, record);
+            
+            if (record.count > activeRateLimit.max) {
+              return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 });
+            }
           }
         }
 
         // Caching
         let cacheKey = null;
-        if (config.cache && globalRedis && req.method === 'GET') {
+        if (config.cache && req.method === 'GET') {
           const urlObj = new URL(req.url);
           const identity = user ? (user.id || user.role || 'user') : (apiKeyUsed || 'anon');
           cacheKey = `cache:${urlObj.pathname}${urlObj.search}:${resolvedLocale}:${identity}`;
           
-          const cachedData = await globalRedis.get(cacheKey);
-          if (cachedData) {
-            return NextResponse.json(JSON.parse(cachedData), { status: 200 });
+          if (globalStore.__broRedis) {
+            const cachedData = await globalStore.__broRedis.get(cacheKey);
+            if (cachedData) {
+              return NextResponse.json(JSON.parse(cachedData), { status: 200 });
+            }
+          } else {
+            const cached = globalStore.__broMemoryCache.get(cacheKey);
+            if (cached) {
+              if (Date.now() < cached.expires) {
+                return NextResponse.json(cached.data, { status: 200 });
+              } else {
+                globalStore.__broMemoryCache.delete(cacheKey);
+              }
+            }
           }
         }
 
@@ -244,7 +282,7 @@ export function createBro(globalConfig = {}) {
           req,
           env: process.env,
           db: globalDb,
-          redis: globalRedis,
+          redis: globalStore.__broRedis,
           io: { emit: () => console.warn('[bro.js/next] WebSockets require standard bro.js server.') },
           body,
           params,
@@ -262,8 +300,12 @@ export function createBro(globalConfig = {}) {
 
         const result = await config.handler(ctx);
 
-        if (cacheKey && globalRedis) {
-           await globalRedis.set(cacheKey, JSON.stringify(result), { EX: config.cache });
+        if (cacheKey) {
+           if (globalStore.__broRedis) {
+             await globalStore.__broRedis.set(cacheKey, JSON.stringify(result), { EX: config.cache });
+           } else {
+             globalStore.__broMemoryCache.set(cacheKey, { data: result, expires: Date.now() + (config.cache * 1000) });
+           }
         }
 
         return NextResponse.json(result, { status: 200 });

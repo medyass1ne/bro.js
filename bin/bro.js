@@ -207,7 +207,8 @@ async function bootstrap() {
   }
 
   const localeDir = globalConfig.locale?.directory || path.join(cwd, 'locale');
-  const { app, server, routes: initialRoutes, reload, reloadLocale, io, shutdown } = await createServer(globalConfig, routesDir, db);
+  const tasksDir = path.join(cwd, 'tasks');
+  const { app, server, routes: initialRoutes, reload, reloadLocale, reloadTasks, io, shutdown } = await createServer(globalConfig, routesDir, db);
   const port = globalConfig.port;
   
   let currentRoutes = initialRoutes;
@@ -234,28 +235,35 @@ async function bootstrap() {
       
       printCurrentRoutes(currentRoutes);
 
-      const localeGlob = localeDir.replace(/\\/g, '/') + '/*.{js,mjs,ts}';
-      const watcher = chokidar.watch([routesDir, localeGlob], { ignoreInitial: true });
+      const localeGlob = localeDir.replace(/\\/g, '/') + '/*.{js,mjs,ts,json}';
+      const watcher = chokidar.watch([routesDir, localeGlob, tasksDir], { ignoreInitial: true });
       
       watcher.on('all', async (event, filepath) => {
-        const isJavaScriptFile = filepath.endsWith('.js') || filepath.endsWith('.ts') || filepath.endsWith('.mjs');
-        if (!isJavaScriptFile) return;
+        const isValidFile = filepath.match(/\.(js|ts|mjs|json)$/);
+        if (!isValidFile) return;
         const relLocale = path.relative(path.resolve(localeDir), filepath);
         const isLocaleFile = !relLocale.startsWith('..') && !path.isAbsolute(relLocale);
+        
+        const relTask = path.relative(path.resolve(tasksDir), filepath);
+        const isTaskFile = !relTask.startsWith('..') && !path.isAbsolute(relTask);
 
         try {
           const reloadStartTime = performance.now();
           if (isLocaleFile) {
             await reloadLocale();
+          } else if (isTaskFile) {
+            await reloadTasks();
           } else {
             currentRoutes = await reload();
           }
           const reloadTimeMs = performance.now() - reloadStartTime;
           
-          printHotReload(path.basename(filepath), event, reloadTimeMs, isLocaleFile ? 'Locale' : 'Route');
+          const fileType = isTaskFile ? 'Task' : (isLocaleFile ? 'Locale' : 'Route');
+          printHotReload(path.basename(filepath), event, reloadTimeMs, fileType);
           printCurrentRoutes(currentRoutes);
         } catch (err) {
-          console.error(`\n  ✗ Error hot-reloading ${isLocaleFile ? 'locale' : 'routes'}:`, err);
+          const fileType = isTaskFile ? 'tasks' : (isLocaleFile ? 'locale' : 'routes');
+          console.error(`\n  ✗ Error hot-reloading ${fileType}:`, err);
         }
       });
     }
