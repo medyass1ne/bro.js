@@ -8,7 +8,8 @@ import path from 'path';
  */
 export function startDashboard(globalConfig, routes) {
   const host = '127.0.0.1'; // Strict local binding
-  const port = (globalConfig.port || 5000) + 1;
+  const basePort = globalConfig.server?.port || globalConfig.port || process.env.PORT || 3000;
+  const port = Number(basePort) + 1;
 
   const server = http.createServer((req, res) => {
     // Restrict access to localhost strictly
