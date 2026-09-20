@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>bro.js | Dev Dashboard</title>
+  <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+  <header>
+    <div class="header-title">
+      <div class="status-dot"></div>
+      bro.js <span style="color: var(--text-muted); font-size: 1rem;">v3.0.0</span>
+    </div>
+    <div class="header-controls">
+      <span class="port-label" id="portLabel"></span>
+      <button class="btn" id="refreshBtn">Refresh</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="metrics-grid">
+      <div class="card">
+        <div class="card-title">Active Routes</div>
+        <div class="card-value" id="routesCount">-</div>
+        <div class="card-subtitle">Endpoints loaded in memory</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Security State</div>
+        <div class="card-value" id="securityState">Strict</div>
+        <div class="card-subtitle" id="securitySubtitle">CORS / Trust Proxy</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Environment</div>
+        <div class="card-value" id="envState">Node.js</div>
+        <div class="card-subtitle" id="envSubtitle">Version</div>
+      </div>
+    </div>
+
+    <div class="search-container">
+      <input type="text" id="searchInput" class="search-input" placeholder="Search routes by path or method (e.g. GET /users)...">
+    </div>
+
+    <div class="routes-list" id="routesList">
+      <!-- Routes injected here -->
+    </div>
+
+    <div class="config-container">
+      <h2>Configuration Inspector</h2>
+      <div class="config-grid" id="configGrid">
+        <!-- Config injected here -->
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let allRoutes = [];
+
+    async function fetchState() {
+      try {
+        const res = await fetch('/api/state');
+        if (!res.ok) throw new Error('Failed to fetch state');
+        const data = await res.json();
+        
+        // Update port
+        document.getElementById('portLabel').textContent = window.location.origin;
+
+        // Update Routes Count
+        document.getElementById('routesCount').textContent = data.routes.length;
+        
+        // Update Env
+        document.getElementById('envState').textContent = data.env.platform;
+        document.getElementById('envSubtitle').textContent = data.env.nodeVersion;
+
+        // Update Security
+        const isStrict = data.config.server?.cors === false || data.config.server?.cors === undefined;
+        document.getElementById('securityState').textContent = isStrict ? 'Strict' : 'Permissive';
+        document.getElementById('securitySubtitle').textContent = `Proxy: ${data.config.trustProxy ? 'Trusted' : 'Untrusted'}`;
+
+        allRoutes = data.routes;
+        renderRoutes(allRoutes);
+        renderConfig(data.config);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        // Could show a toast here
+      });
+    }
+
+    function toggleRoute(index) {
+      const el = document.getElementById(`details-${index}`);
+      if (el) {
+        el.classList.toggle('expanded');
+      }
+    }
+
+    function renderRoutes(routes) {
+      const container = document.getElementById('routesList');
+      container.innerHTML = '';
+      
+      if (routes.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-muted); padding: 1rem;">No routes found.</div>';
+        return;
+      }
+
+      routes.forEach((r, idx) => {
+        const method = r.method.toUpperCase();
+        const path = r.path;
+        
+        const item = document.createElement('div');
+        item.className = 'route-item';
+        
+        item.innerHTML = `
+          <div class="route-header" onclick="toggleRoute(\${idx})">
+            <div class="method-pill method-\${method}">\${method}</div>
+            <div class="route-path" title="Click to expand/collapse">\${path}</div>
+            <div class="badges">
+              <div class="badge \${r.auth !== 'public' ? 'active' : ''}">AUTH: \${r.auth}</div>
+              <div class="badge \${r.rateLimit !== 'none' ? 'active' : ''}">RL: \${r.rateLimit}</div>
+              <div class="badge \${r.cache !== 'none' ? 'active' : ''}">CACHE: \${r.cache}</div>
+            </div>
+          </div>
+          <div class="route-details" id="details-\${idx}">
+            <div class="detail-row">
+              <div class="detail-label">Body</div>
+              <div class="detail-value">\${r.hasBodySchema ? 'Schema Validated' : 'Any'}</div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Query</div>
+              <div class="detail-value">\${r.hasQuerySchema ? 'Schema Validated' : 'Any'}</div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Params</div>
+              <div class="detail-value">\${r.hasParamsSchema ? 'Schema Validated' : 'Any'}</div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Response</div>
+              <div class="detail-value">\${r.hasResponseSchema ? 'Schema Validated' : 'Any'}</div>
+            </div>
+          </div>
+        `;
+        
+        container.appendChild(item);
+      });
+    }
+
+    function renderConfig(config, prefix = '') {
+      const container = document.getElementById('configGrid');
+      if (prefix === '') container.innerHTML = ''; 
+      
+      for (const [key, val] of Object.entries(config)) {
+        const fullKey = prefix ? `${prefix}.${key}` : key;
+        
+        if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+          renderConfig(val, fullKey);
+        } else {
+          let displayVal = val;
+          if (typeof val === 'string') displayVal = `"${val}"`;
+          if (Array.isArray(val)) displayVal = `[${val.join(', ')}]`;
+          if (val === undefined) displayVal = 'undefined';
+          if (val === null) displayVal = 'null';
+          
+          const keyEl = document.createElement('div');
+          keyEl.className = 'config-key';
+          keyEl.textContent = fullKey;
+          
+          const valEl = document.createElement('div');
+          valEl.className = 'config-val';
+          valEl.textContent = displayVal;
+          
+          container.appendChild(keyEl);
+          container.appendChild(valEl);
+        }
+      }
+    }
+
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      const filtered = allRoutes.filter(r => 
+        r.path.toLowerCase().includes(query) || 
+        r.method.toLowerCase().includes(query)
+      );
+      renderRoutes(filtered);
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', fetchState);
+
+    // Initial load
+    fetchState();
+  </script>
+</body>
+</html>

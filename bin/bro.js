@@ -55,7 +55,7 @@ async function bootstrap() {
 
       if (process.argv.includes('--ui')) {
         import('../src/dashboard.js').then(({ startDashboard }) => {
-          startDashboard(globalConfig, currentRoutes);
+          startDashboard(globalConfig, () => currentRoutes);
         }).catch(err => console.error('[bro.js] Error starting dashboard:', err));
       }
     } else if (command === 'start') {
