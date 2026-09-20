@@ -45,7 +45,7 @@ async function bootstrap() {
     db = globalConfig.db;
   }
 
-  const { app, server, routes, reload, reloadLocale, shutdown } = await createServer(globalConfig, routesDir, db);
+  const { app, server, routes, reload, reloadLocale, reloadTasks, shutdown } = await createServer(globalConfig, routesDir, db);
   let currentRoutes = routes;
 
   server.listen(port, () => {
@@ -93,7 +93,7 @@ async function bootstrap() {
           if (isLocaleFile) {
             await reloadLocale();
           } else if (isTaskFile) {
-            // Tasks reload
+            await reloadTasks();
           } else {
             currentRoutes = await reload();
           }

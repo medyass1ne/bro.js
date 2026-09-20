@@ -81,8 +81,15 @@ export async function loadLocale(directory, options = {}) {
 
 	const messages = {};
 	for (const file of files) {
-		const module = await import(`${pathToFileURL(path.join(directory, file)).href}?update=${crypto.randomUUID()}`);
-		const catalog = module.default || module.messages || module;
+		const fullPath = path.join(directory, file);
+		let catalog;
+		if (file.endsWith('.json')) {
+			catalog = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+		} else {
+			const module = await import(`${pathToFileURL(fullPath).href}?update=${crypto.randomUUID()}`);
+			catalog = module.default || module.messages || module;
+		}
+		
 		if (catalog && typeof catalog === 'object') {
 			messages[localeFromFilename(file)] = catalog;
 		}

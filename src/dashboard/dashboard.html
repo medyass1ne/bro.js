@@ -115,31 +115,31 @@
         item.className = 'route-item';
         
         item.innerHTML = `
-          <div class="route-header" onclick="toggleRoute(\${idx})">
-            <div class="method-pill method-\${method}">\${method}</div>
-            <div class="route-path" title="Click to expand/collapse">\${path}</div>
+          <div class="route-header" onclick="toggleRoute(${idx})">
+            <div class="method-pill method-${method}">${method}</div>
+            <div class="route-path" title="Click to expand/collapse">${path}</div>
             <div class="badges">
-              <div class="badge \${r.auth !== 'public' ? 'active' : ''}">AUTH: \${r.auth}</div>
-              <div class="badge \${r.rateLimit !== 'none' ? 'active' : ''}">RL: \${r.rateLimit}</div>
-              <div class="badge \${r.cache !== 'none' ? 'active' : ''}">CACHE: \${r.cache}</div>
+              <div class="badge ${r.auth !== 'public' ? 'active' : ''}">AUTH: ${r.auth}</div>
+              <div class="badge ${r.rateLimit !== 'none' ? 'active' : ''}">RL: ${r.rateLimit}</div>
+              <div class="badge ${r.cache !== 'none' ? 'active' : ''}">CACHE: ${r.cache}</div>
             </div>
           </div>
-          <div class="route-details" id="details-\${idx}">
+          <div class="route-details" id="details-${idx}">
             <div class="detail-row">
               <div class="detail-label">Body</div>
-              <div class="detail-value">\${r.hasBodySchema ? 'Schema Validated' : 'Any'}</div>
+              <div class="detail-value">${r.hasBodySchema ? 'Schema Validated' : 'Any'}</div>
             </div>
             <div class="detail-row">
               <div class="detail-label">Query</div>
-              <div class="detail-value">\${r.hasQuerySchema ? 'Schema Validated' : 'Any'}</div>
+              <div class="detail-value">${r.hasQuerySchema ? 'Schema Validated' : 'Any'}</div>
             </div>
             <div class="detail-row">
               <div class="detail-label">Params</div>
-              <div class="detail-value">\${r.hasParamsSchema ? 'Schema Validated' : 'Any'}</div>
+              <div class="detail-value">${r.hasParamsSchema ? 'Schema Validated' : 'Any'}</div>
             </div>
             <div class="detail-row">
               <div class="detail-label">Response</div>
-              <div class="detail-value">\${r.hasResponseSchema ? 'Schema Validated' : 'Any'}</div>
+              <div class="detail-value">${r.hasResponseSchema ? 'Schema Validated' : 'Any'}</div>
             </div>
           </div>
         `;

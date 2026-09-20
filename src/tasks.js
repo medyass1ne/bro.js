@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
+import crypto from 'node:crypto';
 import cron from 'node-cron';
 import { colors } from './logger.js';
 import { scanDir } from './router.js';
@@ -27,7 +28,7 @@ export async function scanTasks(ctx) {
   let count = 0;
   for (const file of files) {
     try {
-      const moduleUrl = pathToFileURL(file).href;
+      const moduleUrl = `${pathToFileURL(file).href}?update=${crypto.randomUUID()}`;
       const taskModule = await import(moduleUrl);
       
       if (taskModule.cron && typeof taskModule.handler === 'function') {
