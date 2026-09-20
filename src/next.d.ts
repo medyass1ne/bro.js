@@ -12,9 +12,33 @@ export interface UploadedFile {
 }
 
 export interface NextBroGlobalConfig<TEnv = any, TDb = any, TUser = any> {
-  env?: ZodTypeAny;
+  routesDir?: string;
+  tasksDir?: string;
+  logger?: { level?: string; [key: string]: any };
+  plugins?: any[];
+  fixtures?: Record<string, any>;
+  stores?: Record<string, any>;
+  health?: boolean | { dbCheck?: (db: any) => Promise<any> };
   locales?: Record<string, any>;
   defaultLocale?: string;
+  envData?: any;
+  redis?: any;
+  port?: number;
+  jwtSecret?: string;
+  trustProxy?: boolean;
+  validateResponse?: boolean | 'strict' | 'warn';
+  env?: ZodTypeAny;
+  server?: {
+    port?: number;
+    cors?: boolean | object;
+    helmet?: boolean | object;
+    timeoutMs?: number;
+    headersTimeoutMs?: number;
+  };
+  locale?: {
+    directory?: string;
+    defaultLocale?: string;
+  };
   redisUrl?: string;
   rateLimit?: { windowMs: number; max: number; };
   auth?: {
@@ -22,7 +46,18 @@ export interface NextBroGlobalConfig<TEnv = any, TDb = any, TUser = any> {
     apiKey?: string | string[];
     expiresIn?: string | number;
   };
+  docs?: boolean | { auth?: { user: string; pass: string } };
+  upload?: {
+    limits?: {
+      fileSize?: number;
+      files?: number;
+      fields?: number;
+      [key: string]: any;
+    };
+  };
   db?: TDb | Promise<TDb> | (() => TDb | Promise<TDb>) | { init: () => TDb | Promise<TDb> };
+  sockets?: (io: any, db: any) => Promise<void> | void;
+  onShutdown?: (db: any) => Promise<void> | void;
 }
 
 export interface NextRouteContext<TBody = any, TQuery = any, TParams = any, TEnv = any, TDb = any, TUser = any> {
@@ -37,6 +72,11 @@ export interface NextRouteContext<TBody = any, TQuery = any, TParams = any, TEnv
   file?: UploadedFile;
   files?: Record<string, UploadedFile[]>;
   locale: string;
+  method: string;
+  ip: string;
+  headers: Record<string, string>;
+  requestId: string;
+  logger: any;
   t: (key: string, values?: any) => string;
   user?: TUser;
   jwt: { sign: (payload: any, opts?: any) => string };
@@ -52,6 +92,7 @@ export interface NextRouteConfig<TBody = any, TQuery = any, TParams = any, TEnv 
   rateLimit?: { windowMs: number; max: number; } | false;
   response?: ZodTypeAny;
   summary?: string;
+  operationId?: string;
   upload?: any;
   handler: (ctx: NextRouteContext<TBody, TQuery, TParams, TEnv, TDb, TUser>) => Promise<any> | any;
 }

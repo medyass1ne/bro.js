@@ -92,6 +92,12 @@ export async function executeRequest(routeConfig, requestData, globalConfig, ctx
 
   try {
     const ctx = {
+      req: requestData.originalUrl,
+      method: requestData.method,
+      ip: requestData.ip,
+      headers: requestData.headers,
+      locale: requestData.locale,
+      requestId: reqId,
       ...ctxExtras,
       env: globalConfig.envData || process.env,
       body: requestData.body,

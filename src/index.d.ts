@@ -36,6 +36,7 @@ export interface BroContext<Body = any, Params = any, Query = any, App extends A
   t: (key: string, values?: Record<string, unknown>) => string;
   error?: any;
   redis?: any;
+  requestId?: string;
 }
 
 export interface RouteConfig<Body = any, Params = any, Query = any, Response = any, App extends AppContext = AppContext> {
@@ -78,12 +79,28 @@ export interface BroPlugin {
   onShutdown?: () => void | Promise<void>;
 }
 export interface BroConfig {
-    validateResponse?: boolean | 'strict' | 'warn';
+  routesDir?: string;
+  tasksDir?: string;
+  logger?: { level?: string; [key: string]: any };
+  plugins?: BroPlugin[];
+  fixtures?: Record<string, any>;
+  stores?: Record<string, any>;
+  health?: boolean | { dbCheck?: (db: any) => Promise<any> };
+  locales?: Record<string, any>;
+  defaultLocale?: string;
+  envData?: any;
+  redis?: any;
+  port?: number;
+  jwtSecret?: string;
+  trustProxy?: boolean;
+  validateResponse?: boolean | 'strict' | 'warn';
   env?: ZodTypeAny;
   server?: {
     port?: number;
     cors?: boolean | object;
     helmet?: boolean | object;
+    timeoutMs?: number;
+    headersTimeoutMs?: number;
   };
   locale?: {
     directory?: string;

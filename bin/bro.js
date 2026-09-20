@@ -32,7 +32,7 @@ async function bootstrap() {
     }
   }
 
-  const routesDir = globalConfig.routesDir || path.resolve(process.cwd(), 'api');
+  const routesDir = globalConfig.routesDir || path.resolve(process.cwd(), 'routes');
   const localeDir = globalConfig.locale?.directory || path.resolve(process.cwd(), 'locale');
   const tasksDir = globalConfig.tasksDir || path.resolve(process.cwd(), 'tasks');
   const port = globalConfig.server?.port || process.env.PORT || 3000;
@@ -138,15 +138,92 @@ async function bootstrap() {
   const configPath = path.resolve(process.cwd(), 'bro.config.js');
   const envPath = path.resolve(process.cwd(), '.env.example');
   if (!fs.existsSync(configPath)) {
-    fs.writeFileSync(configPath, `export default {
-  server: { port: 3000, cors: false },
-  auth: { jwtSecret: process.env.JWT_SECRET }
-};
+    fs.writeFileSync(configPath, `import { defineConfig } from 'bro-framework';
+
+export default defineConfig({
+  // Server Settings
+  server: {
+    port: 5000,
+    cors: process.env.NODE_ENV === 'production' ? ['https://yourdomain.com'] : true, // Set to true to allow all, or pass a CORS options object
+    helmet: true // Enable security headers
+  },
+
+  // Authentication Settings
+  auth: {
+    jwtSecret: process.env.JWT_SECRET || 'dev_secret_please_change', // Must be at least 32 characters in production
+    expiresIn: '7d',
+    //apiKey: process.env.API_KEY || ['dev_key_1', 'dev_key_2'] // Supports array for zero-downtime rotation
+  },
+
+  // Trust reverse proxy IP headers (Nginx/Cloudflare)
+  trustProxy: true,
+
+  // Observability & Telemetry
+  observability: {
+    // Output structured JSON logs with request IDs and execution timing (ideal for CloudWatch/Datadog)
+    // Options: 'json' | 'pretty' (default: 'pretty' in dev, 'json' in production)
+    logging: 'json',
+
+    // Enable OpenTelemetry W3C trace propagation and HTTP span generation
+    openTelemetry: true
+  }
+
+  // Optional file-based API translations
+  // Add locale/en.js, locale/fr.js, etc.
+  locale: {
+    defaultLocale: 'en'
+  },
+  
+  // API Documentation (Scalar UI)
+  docs: process.env.NODE_ENV !== 'production', // Set to false to disable completely, or true to force in prod
+
+  // Rate Limiting
+  rateLimit: {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100 // limit each IP to 100 requests per windowMs
+  },
+
+  // Redis Configuration (Auto-scales WebSockets, distributed caches & rate-limiting)
+  redisUrl: process.env.REDIS_URL, // e.g., 'redis://localhost:6379'
+
+  // WebSockets Setup
+  sockets: async (io, db) => {
+    io.on('connection', (socket) => {
+      console.log('Client connected:', socket.id);
+    });
+  },
+
+  // Database Context Injection
+  // This instance will be injected into every route's ctx.db (if defined)
+  db: async () => {
+    // If you use a database, set up your connection here
+    // and return the connection instance or an object of your models.
+    // Could be MongoDB, MySQL, etc. (your choice)
+    // --- MONGOOSE EXAMPLE ---
+    // import mongoose from 'mongoose';
+    
+    // await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/bro_database');
+    // console.log("Connected to MongoDB");
+    
+    // You can return mongoose itself, or an object of your models 
+    // to access them instantly in your routes without importing them!
+    // Example: return { User, Post };
+    
+    // return mongoose.connection; 
+    // --------------------------
+    return null;
+  },
+
+  // Graceful Teardown Hook
+  onShutdown: async (db) => {
+    // Close application-owned database resources gracefully here
+  }
+});
 `);
     console.log('[bro.js] Created bro.config.js');
   }
   if (!fs.existsSync(envPath)) {
-    fs.writeFileSync(envPath, 'JWT_SECRET=\n');
+    fs.writeFileSync(envPath, 'JWT_SECRET=your_jwt_secret_here\nNODE_ENV=development\nREDIS_URL=redis://localhost:6379\n');
     console.log('[bro.js] Created .env.example');
   }
 } else if (command === 'doctor') {
@@ -160,7 +237,7 @@ async function bootstrap() {
       if (config.server?.cors === true) console.error('✗ Permissive CORS is enabled (cors: true). Use an array of allowed origins.');
       else console.log('✓ CORS is strict.');
       
-      if (['dev_secret_please_change', 'bro_default_secret_key', 'your_jwt_secret_here'].includes(config.auth?.jwtSecret)) {
+      if (['dev_secret_please_change', 'bro_default_secret_key', 'your_jwt_secret_here', ''].includes(config.auth?.jwtSecret?.trim())) {
         console.error('✗ Hardcoded insecure JWT secret detected.');
       } else {
         console.log('✓ Secrets look ok.');
@@ -168,9 +245,17 @@ async function bootstrap() {
     });
   }
 } else if (command === 'sdk' || command === 'client' || command === 'generate-client') {
-  const sdkOutPath = process.argv[3] || './client.ts';
-  const routesDir = path.resolve(process.cwd(), 'api');
-  generateSDK(routesDir, sdkOutPath).then(() => {
+    const sdkOutPath = process.argv[3] || './client.ts';
+    const configPath = path.resolve(process.cwd(), 'bro.config.js');
+    let globalConfig = {};
+    if (fs.existsSync(configPath)) {
+      try {
+        const configModule = await import(configPath);
+        globalConfig = configModule.default || configModule;
+      } catch (e) {}
+    }
+    const routesDir = globalConfig.routesDir || path.resolve(process.cwd(), 'routes');
+    generateSDK(routesDir, sdkOutPath).then(() => {
     console.log(`\x1b[32m✓ SDK successfully generated at ${sdkOutPath}\x1b[0m`);
   }).catch(err => {
     console.error('\x1b[31m✗ Failed to generate SDK:\x1b[0m', err);
