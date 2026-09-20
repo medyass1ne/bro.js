@@ -17,210 +17,51 @@ dotenv.config();
 
 const command = process.argv[2] || 'dev';
 
-if (command === 'dev') {
-  process.env.NODE_ENV = process.env.NODE_ENV || 'development';
-} else if (command === 'start') {
-  process.env.NODE_ENV = 'production';
-}
-
-const CONFIG_TEMPLATE = `import { defineConfig } from 'bro-framework';
-
-export default defineConfig({
-  // Server Settings
-  server: {
-    port: 5000,
-    cors: true, // Set to true to allow all, or pass a CORS options object
-    helmet: true // Enable security headers
-  },
-
-  // Authentication Settings
-  auth: {
-    jwtSecret: 'dev_secret_please_change',
-    expiresIn: '7d',
-    apiKey: process.env.API_KEY || ['dev_key_1', 'dev_key_2'] // Supports array for zero-downtime rotation
-  },
-
-  // Optional file-based API translations
-  // Add locale/en.js, locale/fr.js, etc.
-  locale: {
-    defaultLocale: 'en'
-  },
-  
-  // API Documentation (Scalar UI)
-  docs: process.env.NODE_ENV !== 'production', // Set to false to disable completely, or true to force in prod
-
-  // Rate Limiting
-  rateLimit: {
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100 // limit each IP to 100 requests per windowMs
-  },
-
-  // Redis Configuration (Auto-scales WebSockets, distributed caches & rate-limiting)
-  redisUrl: process.env.REDIS_URL, // e.g., 'redis://localhost:6379'
-
-  // WebSockets Setup
-  sockets: async (io, db) => {
-    io.on('connection', (socket) => {
-      console.log('Client connected:', socket.id);
-    });
-  },
-
-  // Database Context Injection
-  // This instance will be injected into every route's ctx.db (if defined)
-  db: async () => {
-    // If you use a database, set up your connection here
-    // and return the connection instance or an object of your models.
-    // Could be MongoDB, MySQL, etc. (your choice)
-    // --- MONGOOSE EXAMPLE ---
-    // import mongoose from 'mongoose';
-    
-    // await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/bro_database');
-    // console.log("Connected to MongoDB");
-    
-    // You can return mongoose itself, or an object of your models 
-    // to access them instantly in your routes without importing them!
-    // Example: return { User, Post };
-    
-    // return mongoose.connection; 
-    // --------------------------
-    return null;
-  },
-
-  // Graceful Teardown Hook
-  onShutdown: async (db) => {
-    // Close application-owned database resources gracefully here
-  }
-});
-`;
-
-function scaffoldConfig() {
-  const configPath = path.join(process.cwd(), 'bro.config.js');
-  if (!fs.existsSync(configPath)) {
-    fs.writeFileSync(configPath, CONFIG_TEMPLATE, 'utf-8');
-    console.log(`\n  ${colors.green} Created default bro.config.js${colors.reset}\n`);
-  }
-}
-
-function ensureTypeModule() {
-  const pkgPath = path.join(process.cwd(), 'package.json');
-  
-  if (fs.existsSync(pkgPath)) {
-    try {
-      const pkgRaw = fs.readFileSync(pkgPath, 'utf-8');
-      const pkg = JSON.parse(pkgRaw);
-      
-      if (pkg.type !== 'module') {
-        pkg.type = 'module';
-        fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), 'utf-8');
-        console.log(`\n  ${colors.green} Auto-configured package.json for ES Modules${colors.reset}`);
-      }
-    } catch (err) {
-      console.error(`\n  ${colors.red} Failed to parse package.json for ES Modules setup${colors.reset}`, err);
-    }
-  } else {
-    const defaultPkg = {
-      name: "bro-app",
-      version: "1.0.0",
-      type: "module",
-      private: true
-    };
-    fs.writeFileSync(pkgPath, JSON.stringify(defaultPkg, null, 2), 'utf-8');
-    console.log(`\n  ${colors.green} Created package.json with ES Modules enabled${colors.reset}`);
-  }
-}
-
-if (command === 'init') {
-  ensureTypeModule();
-  scaffoldConfig();
-  process.exit(0);
-}
-
-if (['sdk', 'generate-client', 'client'].includes(command)) {
-  generateSDK().then(() => {
-    console.log(`\n  ${colors.green} bro-sdk.js generated successfully!${colors.reset}\n`);
-    process.exit(0);
-  }).catch(err => {
-    console.error(`\n  ${colors.red} Error generating SDK:${colors.reset}`, err.message);
-    process.exit(1);
-  });
-}
-
 async function bootstrap() {
-  if (command === 'dev') {
-    ensureTypeModule();
-    scaffoldConfig();
-  }
-
   const startTime = performance.now();
+  const configPath = path.resolve(process.cwd(), 'bro.config.js');
+  let globalConfig = {};
   
-  const cwd = process.cwd();
-  const configPath = path.join(cwd, 'bro.config.js');
-  const routesDir = path.join(cwd, 'routes');
-  
-  let globalConfig = {
-    port: process.env.PORT || 5000,
-    jwtSecret: process.env.JWT_SECRET || 'dev_secret_please_change'
-  };
-
-  let db = null;
-
   if (fs.existsSync(configPath)) {
     try {
       const configModule = await import(pathToFileURL(configPath).href);
-      const userConfig = configModule.default || configModule.config || {};
-      
-      if (userConfig.server?.port) globalConfig.port = userConfig.server.port;
-      if (userConfig.auth?.jwtSecret) globalConfig.jwtSecret = userConfig.auth.jwtSecret;
-      
-      globalConfig = { ...globalConfig, ...userConfig };
-      
-      if (typeof globalConfig.db === 'function') {
-        db = await globalConfig.db();
-      } else if (globalConfig.db && typeof globalConfig.db.init === 'function') {
-        db = await globalConfig.db.init();
-      } else if (globalConfig.db) {
-        db = globalConfig.db;
-        if (db instanceof Promise) db = await db;
-      }
+      globalConfig = configModule.default || configModule;
     } catch (err) {
-      console.error('✗ Failed to load bro.config.js:', err);
-    }
-  }
-
-  if (globalConfig.env) {
-    const envResult = globalConfig.env.safeParse(process.env);
-    if (!envResult.success) {
-      console.error(`\n  ${colors.red} Environment Validation Failed${colors.reset}`);
-      envResult.error.errors.forEach(err => {
-        console.error(`  ${colors.dim}-${colors.reset} ${colors.bold}${err.path.join('.')}${colors.reset}: ${err.message}`);
-      });
-      console.error("");
+      console.error('[bro.js] Error loading bro.config.js:', err);
       process.exit(1);
     }
-    globalConfig.envData = envResult.data;
   }
 
-  if (!fs.existsSync(routesDir)) {
-    console.error(`✗ Error: 'routes' directory not found in ${cwd}`);
-    console.error(`  Please create a 'routes/' folder and add your first route.`);
-    process.exit(1);
+  const routesDir = globalConfig.routesDir || path.resolve(process.cwd(), 'api');
+  const localeDir = globalConfig.locale?.directory || path.resolve(process.cwd(), 'locale');
+  const tasksDir = globalConfig.tasksDir || path.resolve(process.cwd(), 'tasks');
+  const port = globalConfig.server?.port || process.env.PORT || 3000;
+
+  let db = null;
+  // Initialize db from globalConfig if provided (mocked here for CLI boot)
+  if (globalConfig.db && typeof globalConfig.db === 'function') {
+    db = await globalConfig.db();
+  } else {
+    db = globalConfig.db;
   }
 
-  const localeDir = globalConfig.locale?.directory || path.join(cwd, 'locale');
-  const tasksDir = path.join(cwd, 'tasks');
-  const { app, server, routes: initialRoutes, reload, reloadLocale, reloadTasks, io, shutdown } = await createServer(globalConfig, routesDir, db);
-  const port = globalConfig.port;
-  
-  let currentRoutes = initialRoutes;
-  
-  server.listen(port, async () => {
+  const { app, server, routes, reload, reloadLocale, shutdown } = await createServer(globalConfig, routesDir, db);
+  let currentRoutes = routes;
+
+  server.listen(port, () => {
     if (command === 'dev') {
       console.clear();
       printBanner(port, performance.now() - startTime);
+
+      if (process.argv.includes('--ui')) {
+        import('../src/dashboard.js').then(({ startDashboard }) => {
+          startDashboard(globalConfig, currentRoutes);
+        }).catch(err => console.error('[bro.js] Error starting dashboard:', err));
+      }
     } else if (command === 'start') {
       console.log(`[bro.js] Server running in production on port ${port}`);
     }
-    
+  
     if (command === 'dev') {
       const printCurrentRoutes = (routesToPrint) => {
         if (routesToPrint.length > 0) {
@@ -252,7 +93,7 @@ async function bootstrap() {
           if (isLocaleFile) {
             await reloadLocale();
           } else if (isTaskFile) {
-            await reloadTasks();
+            // Tasks reload
           } else {
             currentRoutes = await reload();
           }
@@ -270,7 +111,7 @@ async function bootstrap() {
 
     const handleShutdown = async (signal) => {
       console.log(`\n[bro.js] Received ${signal}. Shutting down gracefully...`);
-      await shutdown();
+      if (shutdown) await shutdown();
       console.log('[bro.js] HTTP server closed.');
       process.exit(0);
     };
@@ -280,14 +121,75 @@ async function bootstrap() {
   });
 }
 
-if (command === 'dev' || command === 'start') {
+
+  if (command === 'test') {
+    const hasVitest = fs.existsSync(path.resolve(process.cwd(), 'node_modules', 'vitest'));
+    if (!hasVitest) {
+      console.error(colors.red + 'Vitest is not installed. Please run: npm install -D vitest' + colors.reset);
+      process.exit(1);
+    }
+
+  import('child_process').then(cp => {
+    console.log('\x1b[36m[bro.js]\x1b[0m Starting tests via vitest...');
+    cp.spawn('npx', ['vitest', ...process.argv.slice(3)], { stdio: 'inherit' });
+  });
+
+} else if (command === 'init') {
+  const configPath = path.resolve(process.cwd(), 'bro.config.js');
+  const envPath = path.resolve(process.cwd(), '.env.example');
+  if (!fs.existsSync(configPath)) {
+    fs.writeFileSync(configPath, `export default {
+  server: { port: 3000, cors: false },
+  auth: { jwtSecret: process.env.JWT_SECRET }
+};
+`);
+    console.log('[bro.js] Created bro.config.js');
+  }
+  if (!fs.existsSync(envPath)) {
+    fs.writeFileSync(envPath, 'JWT_SECRET=\n');
+    console.log('[bro.js] Created .env.example');
+  }
+} else if (command === 'doctor') {
+  console.log('[bro.js] Running doctor...');
+  const configPath = path.resolve(process.cwd(), 'bro.config.js');
+  if (!fs.existsSync(configPath)) {
+    console.error('✗ No bro.config.js found.');
+  } else {
+    import(pathToFileURL(configPath).href).then(m => {
+      const config = m.default || m;
+      if (config.server?.cors === true) console.error('✗ Permissive CORS is enabled (cors: true). Use an array of allowed origins.');
+      else console.log('✓ CORS is strict.');
+      
+      if (['dev_secret_please_change', 'bro_default_secret_key', 'your_jwt_secret_here'].includes(config.auth?.jwtSecret)) {
+        console.error('✗ Hardcoded insecure JWT secret detected.');
+      } else {
+        console.log('✓ Secrets look ok.');
+      }
+    });
+  }
+} else if (command === 'sdk' || command === 'client' || command === 'generate-client') {
+  const sdkOutPath = process.argv[3] || './client.ts';
+  const routesDir = path.resolve(process.cwd(), 'api');
+  generateSDK(routesDir, sdkOutPath).then(() => {
+    console.log(`\x1b[32m✓ SDK successfully generated at ${sdkOutPath}\x1b[0m`);
+  }).catch(err => {
+    console.error('\x1b[31m✗ Failed to generate SDK:\x1b[0m', err);
+  });
+} else if (command === 'studio') {
+  import('../src/studio.js').then(({ startStudio }) => {
+    startStudio(process.cwd());
+  }).catch(err => console.error('[bro.js] Error starting studio:', err));
+} else if (command === 'dev' || command === 'start') {
   bootstrap();
-} else if (!['sdk', 'generate-client', 'client', 'init'].includes(command)) {
+} else if (!['init', 'doctor'].includes(command)) {
   console.log(`\n  ${colors.bold}${colors.green}bro.js CLI${colors.reset}\n`);
   console.log(`  ${colors.bold}Usage:${colors.reset} bro <command>\n`);
   console.log(`  ${colors.bold}Commands:${colors.reset}`);
   console.log(`    ${colors.cyan}dev${colors.reset}      Start the development server with hot-reload`);
   console.log(`    ${colors.cyan}start${colors.reset}    Start the production server gracefully`);
   console.log(`    ${colors.cyan}init${colors.reset}     Scaffold a new bro.config.js workspace`);
-  console.log(`    ${colors.cyan}sdk${colors.reset}      Generate a typed frontend client\n`);
+  console.log(`    ${colors.cyan}sdk${colors.reset}      Generate a typed frontend client`);
+  console.log(`    ${colors.cyan}studio${colors.reset}   Generate TS client, OpenAPI, and MSW mocks`);
+  console.log(`    ${colors.cyan}doctor${colors.reset}   Diagnose security and configuration issues`);
+  console.log(`    ${colors.cyan}test${colors.reset}     Run tests using vitest\n`);
 }

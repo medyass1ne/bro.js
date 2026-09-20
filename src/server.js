@@ -13,6 +13,13 @@ import { apiReference } from '@scalar/express-api-reference';
 import { verifyJwt, signJwt } from './auth.js';
 import { loadLocale } from './locale.js';
 import { loadRoutes } from './router.js';
+import { executeRequest, resolveIdentity, RouteRegistry } from './engine.js';
+
+export function hashIdentity(identity) { return crypto.createHash('sha256').update(String(identity)).digest('hex'); }
+export function generateRateLimitKey(req, config, prefix = 'route') { const identity = resolveIdentity(req, config); return `bro:rate_limit:${prefix}:${originalUrl}:${hashIdentity(identity)}`; }
+export function generateCacheKey(req, config, locale) { const identity = resolveIdentity(req, config); return `bro:cache:${method}:${originalUrl}:${locale}:${hashIdentity(identity)}`; }
+import { createLogger } from './logger.js';
+import { PluginManager } from './plugins.js';
 import { scanTasks } from './tasks.js';
 
 /**
@@ -23,12 +30,33 @@ import { scanTasks } from './tasks.js';
  * @returns {Promise<{ app: import('express').Application, server: http.Server, routes: Array, reload: Function, reloadLocale: Function, io: import('socket.io').Server, shutdown: Function }>}
  */
 export async function createServer(globalConfig, routesDir, db) {
-  if (process.env.NODE_ENV === 'production' && ['dev_secret_please_change', 'bro_default_secret_key'].includes(globalConfig.jwtSecret)) {
-    throw new Error('CRITICAL SECURITY ERROR: You are running in production with a default JWT secret! Please set auth.jwtSecret in bro.config.js or via JWT_SECRET environment variable.');
+  if (db && typeof db.isReady !== 'function') {
+     throw new Error('[bro.js] CRITICAL: In v3.0.0, the \'db\' passed to createServer MUST extend BaseDatabaseAdapter and implement isReady(), transaction(), healthCheck(), and shutdown().');
+  }
+  const globalLogger = createLogger(globalConfig.logger || { level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' });
+
+  if (process.env.NODE_ENV === 'production' && (!globalConfig.jwtSecret || globalConfig.jwtSecret.length < 32 || ['dev_secret_please_change', 'bro_default_secret_key', 'your_jwt_secret_here'].includes(globalConfig.jwtSecret))) {
+    throw new Error('CRITICAL SECURITY ERROR: You are running in production without a secure JWT secret! Provide a secret of at least 32 characters.');
+  }
+
+    const routeRegistry = new RouteRegistry();
+    const pluginManager = new PluginManager();
+  if (Array.isArray(globalConfig.plugins)) {
+    for (const plugin of globalConfig.plugins) {
+      pluginManager.register(plugin);
+    }
   }
 
   const app = express();
+  await pluginManager.runOnInit(globalConfig, app);
+  if (db) {
+    if (!await db.isReady()) {
+      throw new Error('[bro.js] Database adapter failed readiness check during boot.');
+    }
+  }
   const server = http.createServer(app);
+  server.requestTimeout = globalConfig.server?.timeoutMs || 30000;
+  server.headersTimeout = globalConfig.server?.headersTimeoutMs || 35000;
   const localeDirectory = globalConfig.locale?.directory || path.join(process.cwd(), 'locale');
   let locale = await loadLocale(localeDirectory, globalConfig.locale);
   
@@ -47,12 +75,52 @@ export async function createServer(globalConfig, routesDir, db) {
     }));
   }
 
-  const corsConfig = globalConfig.server?.cors !== undefined ? globalConfig.server.cors : true;
-  
-  if (corsConfig !== false) {
-    app.use(cors(typeof corsConfig === 'object' ? corsConfig : {}));
+  const corsConfig = globalConfig.server?.cors !== undefined ? globalConfig.server.cors : false;
+  if (corsConfig === true) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('CRITICAL SECURITY ERROR: Permissive CORS (cors: true) is forbidden in production in v3.0.0. Provide an explicit origin allowlist.');
+    }
+    app.use(cors());
+  } else if (corsConfig) {
+    app.use(cors(corsConfig));
   }
   
+  app.use((req, res, next) => {
+    req.id = req.headers['x-request-id'] || crypto.randomUUID();
+    res.setHeader('X-Request-Id', req.id);
+    next();
+  });
+
+  const sendError = (res, status, message, details = null, req) => {
+    let finalMessage = message;
+    let finalDetails = details;
+    if (status >= 500 && process.env.NODE_ENV === 'production') {
+      finalMessage = 'Internal Server Error';
+      finalDetails = null;
+    }
+    const codeMap = { 400: 'BAD_REQUEST', 401: 'UNAUTHORIZED', 403: 'FORBIDDEN', 404: 'NOT_FOUND', 429: 'TOO_MANY_REQUESTS' };
+    const code = codeMap[status] || (status >= 500 ? 'INTERNAL_ERROR' : 'ERROR');
+
+    // v3.0.0 ALWAYS uses RFC 9457 Problem Details
+    const payload = {
+      type: `https://brojs.dev/errors/${code.toLowerCase()}`,
+      title: finalMessage,
+      status,
+      instance: req.originalUrl || req.url,
+      requestId: req.id
+    };
+    if (finalDetails) {
+      if (typeof finalDetails === 'string') payload.detail = finalDetails;
+      else payload.errors = finalDetails;
+    }
+    return res.status(status).type('application/problem+json').json(payload);
+  };
+
+  const formatZodError = (error) => error.issues.map(i => ({ path: i.path.join('.'), message: i.message, code: i.code }));
+
+  
+
+  app.use(pluginManager.getRequestMiddleware());
   app.use(express.json());
   
   const safeConnect = async (client) => {
@@ -96,13 +164,13 @@ export async function createServer(globalConfig, routesDir, db) {
       const fallbackLimiter = rateLimit(globalConfig.rateLimit);
       app.use(async (req, res, next) => {
         try {
-          const key = `rate_limit:global:${req.ip}`;
+          const key = generateRateLimitKey(req, globalConfig, 'global');
           const current = await redisClient.incr(key);
           if (current === 1) {
             await redisClient.expire(key, Math.floor(globalConfig.rateLimit.windowMs / 1000));
           }
           if (current > globalConfig.rateLimit.max) {
-            return res.status(429).json({ error: 'Too Many Requests' });
+            return sendError(res, 429, 'Too Many Requests', null, req);
           }
           next();
         } catch (err) {
@@ -145,30 +213,6 @@ export async function createServer(globalConfig, routesDir, db) {
     const paramsSchema = routeConfig.params;
     const querySchema = routeConfig.query;
     
-    if (routeConfig.rateLimit) {
-      if (redisClient) {
-        const fallbackLimiter = rateLimit(routeConfig.rateLimit);
-        middlewares.push(async (req, res, next) => {
-          try {
-            const key = `rate_limit:${req.ip}:${req.originalUrl}`;
-            const current = await redisClient.incr(key);
-            if (current === 1) {
-              await redisClient.expire(key, Math.floor(routeConfig.rateLimit.windowMs / 1000));
-            }
-            if (current > routeConfig.rateLimit.max) {
-              return res.status(429).json({ error: 'Too Many Requests' });
-            }
-            next();
-          } catch (err) {
-            console.error('[bro.js] Redis Route Rate Limit Error:', err);
-            fallbackLimiter(req, res, next);
-          }
-        });
-      } else {
-        middlewares.push(rateLimit(routeConfig.rateLimit));
-      }
-    }
-    
     if (routeConfig.upload) {
       const defaultLimits = { fileSize: 10 * 1024 * 1024, files: 5, fields: 20, parts: 25, fieldSize: 1024 * 1024 };
       const routeMulterConfig = {
@@ -196,135 +240,54 @@ export async function createServer(globalConfig, routesDir, db) {
     }
     
     middlewares.push(async (req, res) => {
-      try {
-        const requestLocale = locale.resolveLocale(req);
-        const ctx = {
-          env: globalConfig.envData || process.env,
-          db,
-          io,
-          redis: redisClient,
-          body: req.body,
-          params: req.params,
-          query: req.query,
-          files: req.files || req.file,
-          locale: requestLocale,
-          t: (key, values) => locale.translate(requestLocale, key, values),
-          user: null,
-          jwt: { sign: (payload, opts) => signJwt(payload, globalConfig.jwtSecret, opts || { expiresIn: globalConfig.auth?.expiresIn || '1d' }) },
-          error: (status, message) => {
-             const err = new Error(message);
-             err.status = status;
-             throw err;
-          }
-        };
+      const requestData = {
+        method: req.method,
+        originalUrl: req.originalUrl,
+        headers: req.headers,
+        body: req.body,
+        query: req.query,
+        params: req.params,
+        files: req.files || req.file,
+        ip: req.ip,
+        locale: locale.resolveLocale(req)
+      };
+      
+      const ctxExtras = {
+      verifyJwt,
+      generateRateLimitKey,
+      generateCacheKey,
+      generateId: () => crypto.randomUUID(),
+        req,
+        res,
+        db,
+        redis: redisClient,
+        io,
+        pluginManager,
+        t: (key, values) => locale.translate(requestData.locale, key, values),
+        logger: globalLogger,
+        jwt: { sign: (payload, opts) => signJwt(payload, globalConfig.jwtSecret, opts || { expiresIn: globalConfig.auth?.expiresIn || '1d' }) },
+        error: (status, message) => {
+          const err = new Error(message);
+          err.status = status;
+          throw err;
+        },
+        fixtures: globalConfig.fixtures || {},
+        stores: globalConfig.stores || {}
+      };
 
-        if (routeConfig.auth === 'api-key') {
-          const apiKey = req.headers['x-api-key'];
-          const validKey = globalConfig.auth?.apiKey || process.env.API_KEY;
-          
-          let isValid = false;
-          if (Array.isArray(validKey)) {
-            isValid = validKey.includes(apiKey);
-          } else {
-            isValid = apiKey && apiKey === validKey;
-          }
-          
-          if (!isValid) {
-            return res.status(401).json({ error: 'Unauthorized', details: 'Missing or invalid API key' });
-          }
-        } else if (routeConfig.auth) {
-          const authHeader = req.headers.authorization;
-          if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ error: 'Unauthorized', details: 'Missing or invalid Bearer token' });
-          }
-          
-          const token = authHeader?.split(' ')[1] ?? '';
-          const authResult = verifyJwt(token, globalConfig.jwtSecret);
-          
-          if (!authResult.valid) {
-            return res.status(401).json({ error: 'Unauthorized', details: authResult.error });
-          }
-          ctx.user = authResult.payload ?? null;
-          
-          if (Array.isArray(routeConfig.auth)) {
-             if (!ctx.user || !ctx.user.role || !routeConfig.auth.includes(ctx.user.role)) {
-                return res.status(403).json({ error: 'Forbidden', details: 'Insufficient role permissions' });
-             }
-          }
-        }
+      const response = await executeRequest(routeConfig, requestData, globalConfig, ctxExtras);
 
-        if (paramsSchema) {
-          const result = paramsSchema.safeParse(req.params);
-          if (!result.success) {
-            return res.status(400).json({ error: 'Invalid URL Parameters', details: result.error.flatten() });
-          }
-          ctx.params = result.data;
-        }
-        
-        if (bodySchema) {
-          const result = bodySchema.safeParse(req.body);
-          if (!result.success) {
-            return res.status(400).json({ error: 'Invalid Request Body', details: result.error.flatten() });
-          }
-          ctx.body = result.data;
-        }
-
-        if (querySchema) {
-           const result = querySchema.safeParse(req.query);
-           if (!result.success) {
-             return res.status(400).json({ error: 'Invalid Query Parameters', details: result.error.flatten() });
-           }
-           ctx.query = result.data;
-        }
-
-        if (typeof routeConfig.handler !== 'function') {
-           throw new Error('Route "handler" is missing or is not a function');
-        }
-
-        let cacheKey = null;
-        if (routeConfig.cache && redisClient) {
-          const authIdentity = crypto.createHash('sha256').update(req.headers.authorization || req.headers['x-api-key'] || 'anonymous').digest('hex');
-          cacheKey = `bro:cache:${req.method}:${req.originalUrl}:${requestLocale}:${authIdentity}`;
-          try {
-            const cached = await redisClient.get(cacheKey);
-            if (cached) {
-              const parsed = JSON.parse(cached);
-              if (!res.headersSent) res.status(200).json(parsed);
-              return;
-            }
-          } catch (err) {
-            console.error('[bro.js] Cache parsing failed, deleting key:', cacheKey);
-            await redisClient.del(cacheKey).catch(() => {});
-          }
-        }
-
-        const responseData = await routeConfig.handler(ctx);
-        
-        if (!res.headersSent) {
-           if (cacheKey && routeConfig.cache) {
-             await redisClient.setEx(cacheKey, routeConfig.cache, JSON.stringify(responseData));
-           }
-           res.status(200).json(responseData);
-        }
-
-      } catch (err) {
-        const status = err.status || 500;
-        const message = status === 500 ? 'Internal Server Error' : err.message;
-        
-        if (status === 500) {
-          console.error(`[bro.js] Execution Error in route:`);
-          console.error(err.stack);
-        }
-        
-        if (!res.headersSent) {
-          res.status(status).json({ 
-            error: message, 
-            ...(status !== 500 && err.details ? { details: err.details } : {}) 
-          });
+      if (response.headers && !res.headersSent) {
+        for (const [k, v] of Object.entries(response.headers)) {
+          res.setHeader(k, v);
         }
       }
+
+      if (!res.headersSent) {
+        res.status(response.status).json(response.body);
+      }
     });
-    
+
     return middlewares;
   };
 
@@ -376,6 +339,52 @@ export async function createServer(globalConfig, routesDir, db) {
     app.use('/docs', docsAuthMiddleware, apiReference({ spec: { url: '/docs/json' } }));
   }
 
+  if (globalConfig.health) {
+    app.get('/health/live', (req, res) => {
+      res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
+    
+    app.get('/health/ready', async (req, res) => {
+      let isReady = true;
+      const checks = {};
+      
+      const timeoutPromise = (ms, promise) => {
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('timeout')), ms);
+          promise.then(val => { clearTimeout(timer); resolve(val); }).catch(err => { clearTimeout(timer); reject(err); });
+        });
+      };
+
+      if (redisClient) {
+        try {
+          await timeoutPromise(2000, redisClient.ping());
+          checks.redis = 'up';
+        } catch (err) {
+          checks.redis = 'down';
+          isReady = false;
+        }
+      }
+      
+      if (globalConfig.health === true || typeof globalConfig.health.dbCheck !== 'function') {
+         if (db) checks.db = 'unknown (provide health.dbCheck)';
+      } else if (db) {
+        try {
+          await timeoutPromise(2000, globalConfig.health.dbCheck(db));
+          checks.db = 'up';
+        } catch (err) {
+          checks.db = 'down';
+          isReady = false;
+        }
+      }
+
+      res.status(isReady ? 200 : 503).json({
+        status: isReady ? 'ready' : 'unavailable',
+        checks,
+        timestamp: new Date().toISOString()
+      });
+    });
+  }
+
   let routeStack = express.Router();
   
   app.use((req, res, next) => {
@@ -383,18 +392,19 @@ export async function createServer(globalConfig, routesDir, db) {
   });
 
   app.use((req, res) => {
-    res.status(404).json({ error: 'Not Found' });
+    sendError(res, 404, 'Not Found', null, req);
   });
 
+  app.use(pluginManager.getErrorMiddleware());
   app.use((err, req, res, next) => {
     console.error(`[bro.js] Uncaught Error:`, err);
-    res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
+    sendError(res, err.status || 500, err.message || 'Internal Server Error', null, req);
   });
 
   const reload = async () => {
     const newRouter = express.Router();
     const tempSpec = { paths: {} };
-    const routes = await loadRoutes(newRouter, routesDir, createHandler, tempSpec);
+    const routes = await loadRoutes(newRouter, routesDir, createHandler, tempSpec, routeRegistry);
     openApiSpec.paths = tempSpec.paths;
     routeStack = newRouter;
     return routes;
@@ -411,6 +421,7 @@ export async function createServer(globalConfig, routesDir, db) {
 
   const reloadTasks = async () => {
     if (taskManager) taskManager.stopAll();
+    await pluginManager.runOnShutdown();
     taskManager = await scanTasks({ db, io });
   };
 

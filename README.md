@@ -84,6 +84,8 @@ export default defineConfig({
 
 `cors: false` disables HTTP CORS middleware. Helmet is enabled by default and can be disabled with `helmet: false`. Redis is optional; when configured it powers distributed rate limiting, route caching, and Socket.IO scaling. In `NODE_ENV=test`, bro.js can inject `ioredis-mock`; install it in the consuming project's development dependencies.
 
+> **Production Security Note**: When deploying behind a reverse proxy (Nginx, AWS ALB, Vercel, Render), ensure your load balancer properly sets `X-Forwarded-For`. Rate limiting and trusted IP functionality relies on this proxy configuration.
+
 ---
 
 ## The Core Experience
@@ -243,6 +245,40 @@ Handlers receive:
 
 For Redis-backed integration tests without an external Redis server, install `ioredis-mock` in the consuming project and run with `NODE_ENV=test`. bro.js injects a mock Redis client and exercises cache, rate-limit, Socket.IO adapter, and shutdown paths.
 
+### Supertest + Vitest Recipe
+
+You can programmatically bootstrap `bro.js` using `createServer` for blazing fast integration tests. Here's a complete `vitest` recipe:
+
+```javascript
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import request from 'supertest';
+import path from 'path';
+import { createServer } from 'bro-framework';
+import config from '../bro.config.js';
+
+describe('API Tests', () => {
+  let app, shutdown;
+
+  beforeAll(async () => {
+    // 1. Initialize the server programmatically
+    const instance = await createServer(config, path.resolve('./routes'), null);
+    app = instance.app;
+    shutdown = instance.shutdown;
+  });
+
+  afterAll(async () => {
+    // 2. Cleanly teardown tasks, redis, and sockets
+    if (shutdown) await shutdown();
+  });
+
+  it('should return a 200 from the healthcheck', async () => {
+    const res = await request(app).get('/health/live');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+  });
+});
+```
+
 ---
 
 ## Architecture & Request Lifecycle
@@ -336,6 +372,14 @@ export const POST = defineRoute({
 ```
 
 > **Capabilities & Limitations**: Because Next.js API routes are "Serverless" (meaning they sleep when not actively processing a request), features that require a constantly running server such as **WebSockets**, **Background Tasks (Cron)**, **Rate Limiting**, and **Auto-generated Docs** are strictly limited to the standalone `bro.js` framework and are not available in the Next.js adapter.
+
+---
+
+## Compatibility Table
+
+| bro.js Version | Node.js   | Next.js App Router | Express | Zod     |
+| :------------- | :-------- | :----------------- | :------ | :------ |
+| `>= 2.0.0`     | `>= 18.x` | `>= 13.4.x`        | `4.x`   | `3.x`   |
 
 ---
 

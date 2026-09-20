@@ -77,3 +77,50 @@ export function printHotReload(fileName, event, reloadTimeMs, resourceType = 'Ro
   console.log(`\n  ${colors.cyan}${resourceType} updated:${colors.reset} ${colors.bold}${fileName}${colors.reset} ${colors.dim}(${event})${colors.reset}`);
   console.log(`  ${colors.dim}Remapped in ${time}ms${colors.reset}\n`);
 }
+
+export function createLogger(config = {}) {
+  const isJson = config.format === 'json';
+  const levelPriority = { debug: 0, info: 1, warn: 2, error: 3, silent: 4 };
+  const currentLevel = levelPriority[config.level] ?? levelPriority.info;
+
+  const redactKeys = config.redact || ['password', 'token', 'secret', 'authorization'];
+  
+  const redact = (obj) => {
+    if (typeof obj !== 'object' || obj === null) return obj;
+    if (Array.isArray(obj)) return obj.map(redact);
+    const newObj = { ...obj };
+    for (const key of Object.keys(newObj)) {
+      if (redactKeys.some(r => key.toLowerCase().includes(r))) {
+        newObj[key] = '[REDACTED]';
+      } else if (typeof newObj[key] === 'object') {
+        newObj[key] = redact(newObj[key]);
+      }
+    }
+    return newObj;
+  };
+
+  const log = (level, message, meta = {}) => {
+    if (levelPriority[level] < currentLevel) return;
+    const timestamp = new Date().toISOString();
+    
+    if (isJson) {
+      console[level === 'debug' ? 'log' : level](JSON.stringify({ level, timestamp, message, ...redact(meta) }));
+    } else {
+      const colorMap = { debug: colors.dim, info: colors.cyan, warn: colors.yellow, error: colors.red };
+      const c = colorMap[level] || colors.reset;
+      let metaStr = Object.keys(meta).length ? ` ${colors.dim}${JSON.stringify(redact(meta))}${colors.reset}` : '';
+      console[level === 'debug' ? 'log' : level](`${colors.dim}[${timestamp}]${colors.reset} ${c}[${level.toUpperCase()}]${colors.reset} ${message}${metaStr}`);
+    }
+  };
+
+  return {
+    debug: (msg, meta) => log('debug', msg, meta),
+    info: (msg, meta) => log('info', msg, meta),
+    warn: (msg, meta) => log('warn', msg, meta),
+    error: (msg, meta) => log('error', msg, meta),
+    time: (label) => {
+      const start = performance.now();
+      return (msg, meta) => log('info', msg || `${label} completed`, { ...meta, durationMs: performance.now() - start });
+    }
+  };
+}

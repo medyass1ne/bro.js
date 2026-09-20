@@ -27,3 +27,13 @@ export function defineConfig(config) {
 
 export { z };
 export { loadLocale } from './locale.js';
+export { createServer } from './server.js';
+export { createTestHarness as test } from './testing.js';
+export { PluginManager, ObservabilityPlugin, SecurityPlugin } from './plugins.js';
+export { createPinoAdapter, setupOpenTelemetry, createDashboardEventBus } from './observability.js';
+export { BaseDatabaseAdapter, PostgresAdapter } from './database.js';
+export { SecureUploadPipeline, LocalStorageAdapter, S3StorageAdapter } from './uploads.js';
+export { TaskManager } from './task-engine.js';
+export { OidcProvider, PolicyEvaluator, ApiKeyManager, tenantContextPlugin } from './policy-auth.js';
+
+export { RouteRegistry } from './engine.js';

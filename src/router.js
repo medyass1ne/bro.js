@@ -82,7 +82,7 @@ export function parseRouteFile(filePath, routesDir) {
  * @param {Object} [openApiSpec] - Optional OpenAPI Spec object to build.
  * @returns {Promise<Array>} Array of loaded route objects.
  */
-export async function loadRoutes(app, routesDir, createHandler, openApiSpec) {
+export async function loadRoutes(app, routesDir, createHandler, openApiSpec, routeRegistry) {
   const files = scanDir(routesDir);
   const loadedRoutes = [];
   const routeModules = [];

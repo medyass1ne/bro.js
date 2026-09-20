@@ -1,6 +1,6 @@
 {
   "name": "bro-framework",
-  "version": "2.4.5",
+  "version": "3.0.0",
   "description": "The No-BS Backend Framework for Node.js",
   "repository": {
     "type": "git",
@@ -14,16 +14,37 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.d.ts",
-      "import": "./src/index.js",
-      "require": "./src/index.js",
-      "default": "./src/index.js"
+      "node": {
+        "types": "./src/index.d.ts",
+        "import": "./src/index.js",
+        "require": "./src/index.js"
+      },
+      "edge": {
+        "types": "./src/next.d.ts",
+        "import": "./src/edge.js"
+      },
+      "workerd": {
+        "types": "./src/next.d.ts",
+        "import": "./src/edge.js"
+      },
+      "default": {
+        "types": "./src/index.d.ts",
+        "import": "./src/index.js",
+        "require": "./src/index.js"
+      }
     },
     "./next": {
       "types": "./src/next.d.ts",
       "import": "./src/next.js",
-      "require": "./src/next.js",
-      "default": "./src/next.js"
+      "require": "./src/next.js"
+    },
+    "./engine": {
+      "import": "./src/engine.js"
+    },
+    "./package.json": "./package.json",
+    "./edge": {
+      "types": "./src/next.d.ts",
+      "import": "./src/edge.js"
     }
   },
   "bin": {
@@ -98,6 +119,20 @@
     "dx"
   ],
   "devDependencies": {
-    "ioredis-mock": "^8.13.1"
+    "@types/node": "^26.6.2",
+    "ioredis-mock": "^8.13.1",
+    "next": "^16.3.5",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "peerDependencies": {
+    "next": ">=13.0.0"
+  },
+  "peerDependenciesMeta": {
+    "next": {
+      "optional": true
+    }
   }
 }

@@ -1,18 +1,20 @@
-import { NextResponse } from 'next/server.js';
-import crypto from 'node:crypto';
 import { z } from 'zod';
 import { verifyJwt, signJwt } from './auth.js';
-import { createClient } from 'redis';
-import { createLogger } from './logger.js';
 import { executeRequest, RouteRegistry, resolveIdentity } from './engine.js';
-export function hashIdentity(identity) { return crypto.createHash('sha256').update(String(identity)).digest('hex'); }
+
+export async function hashIdentity(identity) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(String(identity));
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 export function generateRateLimitKey(req, config, prefix = 'route') { const identity = resolveIdentity(req, config); return `bro:rate_limit:${prefix}:${originalUrl}:${hashIdentity(identity)}`; }
 export function generateCacheKey(req, config, locale) { const identity = resolveIdentity(req, config); return `bro:cache:${method}:${originalUrl}:${locale}:${hashIdentity(identity)}`; }
 
 export { z };
 
 export function createBro(globalConfig = {}) {
-  const globalLogger = createLogger(globalConfig.logger || { level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' });
+  const globalLogger = { info: console.log, debug: console.debug, warn: console.warn, error: console.error };
 
   let isInitialized = false;
   let initPromise = null;
@@ -21,10 +23,9 @@ export function createBro(globalConfig = {}) {
   let globalLocale = null;
   const routeRegistry = new RouteRegistry();
   
-  const globalStore = globalThis;
-  globalStore.__broRedis = globalStore.__broRedis || null;
-  globalStore.__broMemoryCache = globalStore.__broMemoryCache || new Map();
-  globalStore.__broMemoryRateLimit = globalStore.__broMemoryRateLimit || new Map();
+  const __broRedis = null;
+  const __broMemoryCache = new Map();
+  const __broMemoryRateLimit = new Map();
 
   async function ensureInitialized() {
     if (isInitialized) return;
@@ -32,13 +33,13 @@ export function createBro(globalConfig = {}) {
 
     initPromise = (async () => {
       try {
-        if (process.env.NODE_ENV === 'production' && ['dev_secret_please_change', 'bro_default_secret_key', 'your_jwt_secret_here'].includes(globalConfig.auth?.jwtSecret)) {
+        if ((typeof process !== 'undefined' ? process.env : {}).NODE_ENV === 'production' && ['dev_secret_please_change', 'bro_default_secret_key', 'your_jwt_secret_here'].includes(globalConfig.auth?.jwtSecret)) {
           throw new Error('CRITICAL SECURITY ERROR: You are running in production with a default JWT secret!');
         }
 
         if (globalConfig.env) {
           try {
-            globalConfig.env.parse(process.env);
+            globalConfig.env.parse((typeof process !== 'undefined' ? process.env : {}));
           } catch (err) {
             console.error('[bro.js/next] Environment Validation Error:', err);
             throw err;
@@ -54,17 +55,7 @@ export function createBro(globalConfig = {}) {
           if (globalDb instanceof Promise) globalDb = await globalDb;
         }
 
-        if (globalConfig.redisUrl) {
-          globalStore.__broRedis = createClient({ url: globalConfig.redisUrl });
-          globalStore.__broRedis.on('error', (err) => console.error('[bro.js/next] Redis Error:', err));
-          if (!globalStore.__broRedis.isOpen) {
-             await globalStore.__broRedis.connect().catch(err => {
-                if (!err.message.includes('already connecting') && !err.message.includes('already connected')) {
-                  throw err;
-                }
-             });
-          }
-        }
+        // Redis is not supported natively in edge.js. Provide via globalConfig.redis client.
 
         isInitialized = true;
       } catch (err) {
@@ -180,31 +171,31 @@ export function createBro(globalConfig = {}) {
           locale: resolvedLocale
         };
 
-        let redisFallback = globalStore.__broRedis;
+        let redisFallback = __broRedis;
         if (!redisFallback) {
           redisFallback = {
             async get(key) {
-               const cached = globalStore.__broMemoryCache.get(key);
+               const cached = __broMemoryCache.get(key);
                if (cached && Date.now() < cached.expires) return JSON.stringify(cached.data);
                return null;
             },
             async setEx(key, ex, val) {
-               globalStore.__broMemoryCache.set(key, { data: JSON.parse(val), expires: Date.now() + (ex * 1000) });
+               __broMemoryCache.set(key, { data: JSON.parse(val), expires: Date.now() + (ex * 1000) });
             },
-            async del(key) { globalStore.__broMemoryCache.delete(key); },
+            async del(key) { __broMemoryCache.delete(key); },
             async incr(key) {
                const now = Date.now();
-               let record = globalStore.__broMemoryRateLimit.get(key);
+               let record = __broMemoryRateLimit.get(key);
                if (!record || now > record.expires) record = { count: 0, expires: now + 60000 };
                record.count++;
-               globalStore.__broMemoryRateLimit.set(key, record);
+               __broMemoryRateLimit.set(key, record);
                return record.count;
             },
             async expire(key, ex) {
-               let record = globalStore.__broMemoryRateLimit.get(key);
+               let record = __broMemoryRateLimit.get(key);
                if (record) {
                  record.expires = Date.now() + (ex * 1000);
-                 globalStore.__broMemoryRateLimit.set(key, record);
+                 __broMemoryRateLimit.set(key, record);
                }
             }
           };
@@ -221,20 +212,20 @@ export function createBro(globalConfig = {}) {
           io: { emit: () => console.warn('[bro.js/next] WebSockets require standard bro.js server.') },
           t: (key, values) => translate(resolvedLocale, key, values),
           logger: globalLogger,
-          jwt: { sign: (payload, opts) => signJwt(payload, globalConfig?.auth?.jwtSecret || process.env.JWT_SECRET, Object.assign({ expiresIn: globalConfig?.auth?.expiresIn || '1d' }, opts || {})) },
+          jwt: { sign: (payload, opts) => signJwt(payload, globalConfig?.auth?.jwtSecret || (typeof process !== 'undefined' ? process.env : {}).JWT_SECRET, Object.assign({ expiresIn: globalConfig?.auth?.expiresIn || '1d' }, opts || {})) },
           error: errorHelper
         };
 
         const response = await executeRequest(config, requestData, globalConfig, ctxExtras);
 
-        return NextResponse.json(response.body, { 
+        return Response.json(response.body, { 
            status: response.status, 
            headers: response.headers 
         });
 
       } catch (error) {
         console.error('[bro.js/next] Unhandled Error:', error);
-        return NextResponse.json(
+        return Response.json(
           { 
             type: 'https://brojs.dev/errors/internal_server_error',
             title: 'Internal Server Error',

@@ -11,7 +11,7 @@ export interface UploadedFile {
   text: () => Promise<string>;
 }
 
-export interface NextBroGlobalConfig<TDb = any> {
+export interface NextBroGlobalConfig<TEnv = any, TDb = any, TUser = any> {
   env?: ZodTypeAny;
   locales?: Record<string, any>;
   defaultLocale?: string;
@@ -25,9 +25,9 @@ export interface NextBroGlobalConfig<TDb = any> {
   db?: TDb | Promise<TDb> | (() => TDb | Promise<TDb>) | { init: () => TDb | Promise<TDb> };
 }
 
-export interface NextRouteContext<TBody = any, TQuery = any, TParams = any, TDb = any> {
+export interface NextRouteContext<TBody = any, TQuery = any, TParams = any, TEnv = any, TDb = any, TUser = any> {
   req: Request;
-  env: Record<string, string | undefined>;
+  env: TEnv;
   db: TDb;
   redis: any;
   io: { emit: (event: string, data: any) => void };
@@ -38,12 +38,12 @@ export interface NextRouteContext<TBody = any, TQuery = any, TParams = any, TDb 
   files?: Record<string, UploadedFile[]>;
   locale: string;
   t: (key: string, values?: any) => string;
-  user?: any;
+  user?: TUser;
   jwt: { sign: (payload: any, opts?: any) => string };
   error: (status: number, message: string) => never;
 }
 
-export interface NextRouteConfig<TBody = any, TQuery = any, TParams = any, TDb = any> {
+export interface NextRouteConfig<TBody = any, TQuery = any, TParams = any, TEnv = any, TDb = any, TUser = any> {
   auth?: boolean | string[] | 'api-key' | string;
   body?: TBody;
   query?: TQuery;
@@ -53,18 +53,18 @@ export interface NextRouteConfig<TBody = any, TQuery = any, TParams = any, TDb =
   response?: ZodTypeAny;
   summary?: string;
   upload?: any;
-  handler: (ctx: NextRouteContext<TBody, TQuery, TParams, TDb>) => Promise<any> | any;
+  handler: (ctx: NextRouteContext<TBody, TQuery, TParams, TEnv, TDb, TUser>) => Promise<any> | any;
 }
 
-export interface BroNextInstance<TDb = any> {
+export interface BroNextInstance<TEnv = any, TDb = any, TUser = any> {
   z: typeof z;
   defineRoute: <
     TBody extends ZodTypeAny = any,
     TQuery extends ZodTypeAny = any,
     TParams extends ZodTypeAny = any
   >(
-    config: NextRouteConfig<TBody, TQuery, TParams, TDb>
+    config: NextRouteConfig<TBody, TQuery, TParams, TEnv, TDb, TUser>
   ) => (req: Request | any, context: any) => Promise<any>;
 }
 
-export declare function createBro<TDb = any>(config?: NextBroGlobalConfig<TDb>): BroNextInstance<TDb>;
+export declare function createBro<TEnv = any, TDb = any, TUser = any>(config?: NextBroGlobalConfig<TEnv, TDb, TUser>): BroNextInstance<TEnv, TDb, TUser>;
