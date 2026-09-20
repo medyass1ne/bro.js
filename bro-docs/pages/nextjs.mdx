@@ -62,8 +62,7 @@ To keep things simple, here is a list of features that are **only available in t
 
 1. **WebSockets (Socket.IO)**: WebSockets require a constantly open connection between the client and a running server. Serverless functions cannot keep connections open forever, so Socket.IO is disabled.
 2. **Background Tasks (Cron Jobs)**: Background tasks require a server to be constantly ticking in the background. Since Next.js routes go to sleep, cron jobs will not run here.
-3. **Caching & Rate Limiting**: Next.js has its own built-in caching (`fetch` cache) and edge rate-limiting solutions (like Vercel KV), so the adapter relies on Next.js for these features instead of the core framework's Redis limiters.
-4. **Auto-Generated Docs (OpenAPI / Scalar)**: The adapter does not currently generate the interactive `/docs` UI.
-5. **Graceful Shutdown**: Serverless functions don't have a "shutdown" phase, so the `onShutdown` hook is ignored.
+3. **Auto-Generated Docs (OpenAPI / Scalar)**: The adapter does not currently generate the interactive `/docs` UI.
+4. **Graceful Shutdown**: Serverless functions don't have a "shutdown" phase, so the `onShutdown` hook is ignored.
 
-If you need WebSockets, cron jobs, or auto-generated documentation, you should use the standard `bro.js` framework by running `npx bro init`!
+If you need WebSockets, cron jobs, or auto-generated documentation, you should use the standard `bro.js` framework by running `npx bro init` or `npx create-bro-framework@latest` in a new folder!
