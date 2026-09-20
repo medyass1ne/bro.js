@@ -6,8 +6,8 @@ import { createClient } from 'redis';
 import { createLogger } from './logger.js';
 import { executeRequest, RouteRegistry, resolveIdentity } from './engine.js';
 export function hashIdentity(identity) { return crypto.createHash('sha256').update(String(identity)).digest('hex'); }
-export function generateRateLimitKey(req, config, prefix = 'route') { const identity = resolveIdentity(req, config); return `bro:rate_limit:${prefix}:${originalUrl}:${hashIdentity(identity)}`; }
-export function generateCacheKey(req, config, locale) { const identity = resolveIdentity(req, config); return `bro:cache:${method}:${originalUrl}:${locale}:${hashIdentity(identity)}`; }
+export function generateRateLimitKey(req, config, prefix = 'route') { const identity = resolveIdentity(req, config); return `bro:rate_limit:${prefix}:${req.originalUrl}:${hashIdentity(identity)}`; }
+export function generateCacheKey(req, config, locale) { const identity = resolveIdentity(req, config); return `bro:cache:${req.method}:${req.originalUrl}:${locale}:${hashIdentity(identity)}`; }
 
 export { z };
 

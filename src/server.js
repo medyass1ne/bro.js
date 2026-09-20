@@ -16,8 +16,8 @@ import { loadRoutes } from './router.js';
 import { executeRequest, resolveIdentity, RouteRegistry } from './engine.js';
 
 export function hashIdentity(identity) { return crypto.createHash('sha256').update(String(identity)).digest('hex'); }
-export function generateRateLimitKey(req, config, prefix = 'route') { const identity = resolveIdentity(req, config); return `bro:rate_limit:${prefix}:${originalUrl}:${hashIdentity(identity)}`; }
-export function generateCacheKey(req, config, locale) { const identity = resolveIdentity(req, config); return `bro:cache:${method}:${originalUrl}:${locale}:${hashIdentity(identity)}`; }
+export function generateRateLimitKey(req, config, prefix = 'route') { const identity = resolveIdentity(req, config); return `bro:rate_limit:${prefix}:${req.originalUrl || req.url}:${hashIdentity(identity)}`; }
+export function generateCacheKey(req, config, locale) { const identity = resolveIdentity(req, config); return `bro:cache:${req.method}:${req.originalUrl || req.url}:${locale}:${hashIdentity(identity)}`; }
 import { createLogger } from './logger.js';
 import { PluginManager } from './plugins.js';
 import { scanTasks } from './tasks.js';
@@ -103,7 +103,7 @@ export async function createServer(globalConfig, routesDir, db) {
 
     // v3.0.0 ALWAYS uses RFC 9457 Problem Details
     const payload = {
-      type: `https://brojs.dev/errors/${code.toLowerCase()}`,
+      type: `errors/${code.toLowerCase()}`,
       title: finalMessage,
       status,
       instance: req.originalUrl || req.url,

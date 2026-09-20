@@ -1,4 +1,6 @@
 
+import crypto from 'node:crypto';
+
 export function resolveIdentity(req, config = {}) {
   const headers = req.headers || {};
   let ip = req.ip || (req.socket && req.socket.remoteAddress) || 'anonymous';
@@ -246,6 +248,12 @@ export async function executeRequest(routeConfig, requestData, globalConfig, ctx
     const status = err.status || 500;
     const title = status === 500 ? 'Internal Server Error' : err.message;
     const isProd = process.env.NODE_ENV === 'production';
+    
+    if (status >= 500) {
+      console.error(`[bro.js] Execution Error in route:`);
+      console.error(err.stack || err);
+    }
+    
     return { status, headers: errorHeaders, body: formatErrorEnvelope(status, isProd && status >= 500 ? 'Internal Server Error' : title, isProd && status >= 500 ? null : err.details, reqId, requestData.originalUrl), error: status >= 500 ? err : undefined };
   }
 }
