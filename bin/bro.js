@@ -166,7 +166,7 @@ export default defineConfig({
 
     // Enable OpenTelemetry W3C trace propagation and HTTP span generation
     openTelemetry: true
-  }
+  },
 
   // Optional file-based API translations
   // Add locale/en.js, locale/fr.js, etc.
