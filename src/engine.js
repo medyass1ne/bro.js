@@ -118,7 +118,7 @@ export async function executeRequest(routeConfig, requestData, globalConfig, ctx
     const redisClient = ctxExtras.redis;
 
     if (activeRateLimit && redisClient) {
-      const rlKey = generateRateLimitKey ? await generateRateLimitKey(requestData, globalConfig) : `bro:rl:${requestData.originalUrl}:${requestData.ip}`;
+      const rlKey = ctxExtras.generateRateLimitKey ? await ctxExtras.generateRateLimitKey(requestData, globalConfig) : `bro:rl:${requestData.originalUrl}:${requestData.ip}`;
       try {
         const current = await redisClient.incr(rlKey);
         const windowSeconds = Math.floor(activeRateLimit.windowMs / 1000);

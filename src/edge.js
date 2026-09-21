@@ -8,8 +8,8 @@ export async function hashIdentity(identity) {
   const hash = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
-export function generateRateLimitKey(req, config, prefix = 'route') { const identity = resolveIdentity(req, config); return `bro:rate_limit:${prefix}:${req.originalUrl || req.url}:${hashIdentity(identity)}`; }
-export function generateCacheKey(req, config, locale) { const identity = resolveIdentity(req, config); return `bro:cache:${req.method}:${req.originalUrl || req.url}:${locale}:${hashIdentity(identity)}`; }
+export async function generateRateLimitKey(req, config, prefix = 'route') { const identity = resolveIdentity(req, config); const hash = await hashIdentity(identity); return `bro:rate_limit:${prefix}:${req.originalUrl || req.url}:${hash}`; }
+export async function generateCacheKey(req, config, locale) { const identity = resolveIdentity(req, config); const hash = await hashIdentity(identity); return `bro:cache:${req.method}:${req.originalUrl || req.url}:${locale}:${hash}`; }
 
 export { z };
 
