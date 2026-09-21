@@ -236,7 +236,7 @@ export function createBro(globalConfig = {}) {
         console.error('[bro.js/next] Unhandled Error:', error);
         return NextResponse.json(
           { 
-            type: 'https://brojs.dev/errors/internal_server_error',
+            type: 'errors/internal_server_error',
             title: 'Internal Server Error',
             status: 500,
             instance: req.url,
