@@ -1,5 +1,6 @@
 
 import crypto from 'node:crypto';
+import { verifyJwt } from "./auth.js";
 
 export function resolveIdentity(req, config = {}) {
   const headers = req.headers || {};
@@ -64,7 +65,7 @@ export function formatErrorEnvelope(status, title, details, reqId, instanceUrl =
   const code = codeMap[status] || (status >= 500 ? 'INTERNAL_ERROR' : 'ERROR');
 
   const payload = {
-    type: `https://brojs.dev/errors/${code.toLowerCase()}`,
+    type: `errors/${code.toLowerCase()}`,
     title,
     status,
     instance: instanceUrl,
