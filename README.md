@@ -6,6 +6,7 @@
   </p>
   <p align="center">
     <a href="https://www.npmjs.com/package/bro-framework"><img src="https://img.shields.io/npm/v/bro-framework.svg?style=flat-square&color=e11d48" alt="npm version"></a>
+    <a href="https://www.npmjs.com/package/bro-framework"><img src="https://img.shields.io/npm/dm/bro-framework.svg?style=flat-square&color=e11d48" alt="npm downloads"></a>
     <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License: MIT">
     <img src="https://img.shields.io/badge/Node.js-%3E%3D%2018-green.svg?style=flat-square" alt="Node.js: >= 18">
     <img src="https://img.shields.io/badge/Architecture-Pure%20ESM-orange.svg?style=flat-square" alt="Architecture: Pure ESM">
