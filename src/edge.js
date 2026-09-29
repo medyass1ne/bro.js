@@ -23,9 +23,16 @@ export function createBro(globalConfig = {}) {
   let globalLocale = null;
   const routeRegistry = new RouteRegistry();
   
+  class LRUMap {
+    constructor(limit = 1000) { this.limit = limit; this.map = new Map(); }
+    get(key) { if (!this.map.has(key)) return undefined; const val = this.map.get(key); this.map.delete(key); this.map.set(key, val); return val; }
+    set(key, value) { if (this.map.size >= this.limit && !this.map.has(key)) this.map.delete(this.map.keys().next().value); this.map.set(key, value); }
+    delete(key) { this.map.delete(key); }
+  }
+
   const __broRedis = null;
-  const __broMemoryCache = new Map();
-  const __broMemoryRateLimit = new Map();
+  const __broMemoryCache = new LRUMap(5000);
+  const __broMemoryRateLimit = new LRUMap(5000);
 
   async function ensureInitialized() {
     if (isInitialized) return;
@@ -131,7 +138,60 @@ export function createBro(globalConfig = {}) {
           
           if (contentType.includes('multipart/form-data')) {
              try {
-                const formData = await req.formData();
+                const contentLength = req.headers.get('content-length');
+                const routeLimit = config.upload?.limits?.fileSize;
+                const globalLimit = globalConfig.upload?.limits?.fileSize;
+                const maxSize = routeLimit || globalLimit || 10 * 1024 * 1024; // 10MB default
+                
+                if (contentLength && Number(contentLength) > maxSize) {
+                  return Response.json(
+                    { type: 'errors/payload_too_large', title: 'Payload Too Large', status: 413 },
+                    { status: 413, headers: { 'Content-Type': 'application/problem+json' } }
+                  );
+                }
+
+                let formData;
+                if (req.body) {
+                   const reader = req.body.getReader();
+                   let bytesRead = 0;
+                   const stream = new ReadableStream({
+                     async pull(controller) {
+                       const { done, value } = await reader.read();
+                       if (done) {
+                         controller.close();
+                         return;
+                       }
+                       bytesRead += value.byteLength;
+                       if (bytesRead > maxSize) {
+                         controller.error(new Error('Payload Too Large'));
+                         return;
+                       }
+                       controller.enqueue(value);
+                     },
+                     cancel() {
+                       reader.cancel();
+                     }
+                   });
+                   const limitedReq = new Request(req.url, {
+                     method: 'POST',
+                     headers: req.headers,
+                     body: stream,
+                     duplex: 'half'
+                   });
+                   try {
+                     formData = await limitedReq.formData();
+                   } catch (err) {
+                     if (err.message === 'Payload Too Large') {
+                       return Response.json(
+                         { type: 'errors/payload_too_large', title: 'Payload Too Large', status: 413 },
+                         { status: 413, headers: { 'Content-Type': 'application/problem+json' } }
+                       );
+                     }
+                     throw err;
+                   }
+                } else {
+                   formData = await req.formData();
+                }
                 for (const [key, value] of formData.entries()) {
                    if (value instanceof File || value instanceof Blob) {
                       if (!parsedFiles[key]) parsedFiles[key] = [];

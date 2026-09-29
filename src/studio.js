@@ -133,12 +133,38 @@ export class ContractStudio {
     async generateReactQuery(endpoints) {
     let rqCode = `import { useQuery, useMutation } from '@tanstack/react-query';\nimport { api } from './bro-sdk';\n\n`;
     for (const ep of endpoints) {
-      const hookName = `use${ep.moduleName}`;
-      const fnName = ep.moduleName.charAt(0).toLowerCase() + ep.moduleName.slice(1);
-      if (ep.method.toLowerCase() === 'get') {
-        rqCode += `export function ${hookName}(query, options) {\n  return useQuery({\n    queryKey: ['${ep.routePath}', query],\n    queryFn: () => api.${fnName}(query),\n    ...options\n  });\n}\n\n`;
+      let stableName = ep.config?.operationId;
+      if (!stableName) {
+        const cleanPath = ep.routePath.replace(/[^a-zA-Z0-9]/g, ' ').trim().split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+        stableName = ep.method.toLowerCase() + cleanPath;
+      }
+      const hookName = `use${stableName.charAt(0).toUpperCase() + stableName.slice(1)}`;
+
+      const parts = ep.routePath.split('/').filter(Boolean);
+      let sdkCall = 'api';
+      if (parts.length === 0) {
+        sdkCall += '.root';
       } else {
-        rqCode += `export function ${hookName}(options) {\n  return useMutation({\n    mutationFn: (data) => api.${fnName}(data),\n    ...options\n  });\n}\n\n`;
+        for (const part of parts) {
+          if (part.startsWith(':')) {
+             const pName = part.slice(1);
+             sdkCall += `(args.${pName})`;
+          } else {
+             const isValidIdentifier = (key) => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key);
+             if (isValidIdentifier(part)) {
+               sdkCall += `.${part}`;
+             } else {
+               sdkCall += `["${part}"]`;
+             }
+          }
+        }
+      }
+      sdkCall += `.${ep.method.toLowerCase()}`;
+
+      if (ep.method.toLowerCase() === 'get') {
+        rqCode += `export function ${hookName}(args, options) {\n  return useQuery({\n    queryKey: ['${ep.routePath}', args],\n    queryFn: () => ${sdkCall}(args),\n    ...options\n  });\n}\n\n`;
+      } else {
+        rqCode += `export function ${hookName}(options) {\n  return useMutation({\n    mutationFn: (args) => ${sdkCall}(args),\n    ...options\n  });\n}\n\n`;
       }
     }
     fs.writeFileSync(path.join(this.outputDir, 'react-query.js'), rqCode);

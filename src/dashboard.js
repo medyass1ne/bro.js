@@ -15,10 +15,17 @@ export function startDashboard(globalConfig, routeRegistryOrGetter) {
   const port = Number(basePort) + 1;
 
   const server = http.createServer(async (req, res) => {
-    // Restrict access to localhost strictly
+    // Restrict access to localhost strictly (IP + Host header for DNS Rebinding protection)
     if (req.socket.remoteAddress !== '127.0.0.1' && req.socket.remoteAddress !== '::1') {
       res.writeHead(403);
       res.end('Forbidden: Dashboard only available on localhost');
+      return;
+    }
+
+    const hostHeader = (req.headers.host || '').split(':')[0];
+    if (hostHeader !== 'localhost' && hostHeader !== '127.0.0.1' && hostHeader !== '[::1]') {
+      res.writeHead(403);
+      res.end('Forbidden: Invalid Host Header (DNS Rebinding Protection)');
       return;
     }
 
@@ -44,10 +51,17 @@ export function startDashboard(globalConfig, routeRegistryOrGetter) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       
       // Strict Redaction of Secrets
-      const redactedConfig = JSON.parse(JSON.stringify(globalConfig, (k, v) => typeof v === 'function' ? '[Function]' : v));
-      if (redactedConfig.auth?.jwtSecret) redactedConfig.auth.jwtSecret = '***REDACTED***';
+      const redactedConfig = JSON.parse(JSON.stringify(globalConfig, (k, v) => {
+        if (typeof v === 'function') return '[Function]';
+        if (typeof k === 'string') {
+          const lowerK = k.toLowerCase();
+          if (lowerK.includes('secret') || lowerK.includes('key') || lowerK.includes('pass') || lowerK.includes('token') || lowerK.includes('url')) {
+            return '***REDACTED***';
+          }
+        }
+        return v;
+      }));
       if (redactedConfig.db) redactedConfig.db = '[Database Instance]';
-      if (redactedConfig.redisUrl) redactedConfig.redisUrl = '***REDACTED***';
       
       // Dynamic live state resolution
       const routes = typeof routeRegistryOrGetter === 'function' 

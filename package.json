@@ -1,6 +1,6 @@
 {
   "name": "bro-framework",
-  "version": "3.0.8",
+  "version": "3.1.0",
   "description": "The No-BS Backend Framework for Node.js",
   "repository": {
     "type": "git",
@@ -16,8 +16,7 @@
     ".": {
       "node": {
         "types": "./src/index.d.ts",
-        "import": "./src/index.js",
-        "require": "./src/index.js"
+        "import": "./src/index.js"
       },
       "edge": {
         "types": "./src/next.d.ts",
@@ -29,14 +28,12 @@
       },
       "default": {
         "types": "./src/index.d.ts",
-        "import": "./src/index.js",
-        "require": "./src/index.js"
+        "import": "./src/index.js"
       }
     },
     "./next": {
       "types": "./src/next.d.ts",
-      "import": "./src/next.js",
-      "require": "./src/next.js"
+      "import": "./src/next.js"
     },
     "./engine": {
       "import": "./src/engine.js"
@@ -66,7 +63,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.3.0",
     "node-cron": "^4.6.0",
-    "redis": "^6.2.1",
+    "redis": "^4.6.14",
     "socket.io": "^4.8.3",
     "tsx": "^4.23.13",
     "zod": "^3.23.8",

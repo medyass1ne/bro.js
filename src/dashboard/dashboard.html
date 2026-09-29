@@ -98,6 +98,19 @@
       }
     }
 
+    function escapeHTML(str) {
+      if (str === null || str === undefined) return '';
+      return String(str).replace(/[&<>'"]/g, 
+        tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+        }[tag] || tag)
+      );
+    }
+
     function renderRoutes(routes) {
       const container = document.getElementById('routesList');
       container.innerHTML = '';
@@ -108,8 +121,8 @@
       }
 
       routes.forEach((r, idx) => {
-        const method = r.method.toUpperCase();
-        const path = r.path;
+        const method = escapeHTML(r.method.toUpperCase());
+        const path = escapeHTML(r.path);
         
         const item = document.createElement('div');
         item.className = 'route-item';
@@ -119,9 +132,9 @@
             <div class="method-pill method-${method}">${method}</div>
             <div class="route-path" title="Click to expand/collapse">${path}</div>
             <div class="badges">
-              <div class="badge ${r.auth !== 'public' ? 'active' : ''}">AUTH: ${r.auth}</div>
-              <div class="badge ${r.rateLimit !== 'none' ? 'active' : ''}">RL: ${r.rateLimit}</div>
-              <div class="badge ${r.cache !== 'none' ? 'active' : ''}">CACHE: ${r.cache}</div>
+              <div class="badge ${r.auth !== 'public' ? 'active' : ''}">AUTH: ${escapeHTML(r.auth)}</div>
+              <div class="badge ${r.rateLimit !== 'none' ? 'active' : ''}">RL: ${escapeHTML(r.rateLimit)}</div>
+              <div class="badge ${r.cache !== 'none' ? 'active' : ''}">CACHE: ${escapeHTML(r.cache)}</div>
             </div>
           </div>
           <div class="route-details" id="details-${idx}">

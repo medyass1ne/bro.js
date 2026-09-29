@@ -59,8 +59,12 @@ async function request(method, path, data) {
   };
 
   if (data && ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
-    headers['Content-Type'] = 'application/json';
-    options.body = JSON.stringify(data);
+    if (typeof FormData !== 'undefined' && data instanceof FormData) {
+      options.body = data;
+    } else {
+      headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify(data);
+    }
   } else if (data && ['GET', 'DELETE'].includes(method.toUpperCase())) {
     const params = new URLSearchParams(data);
     const qs = params.toString();

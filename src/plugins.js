@@ -2,6 +2,28 @@
  * Plugin Manager for bro.js
  * Handles lifecycle hooks, context extension, and typed plugins.
  */
+function createReadOnlyProxy(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  return new Proxy(obj, {
+    set(target, prop, value) {
+      throw new Error(`[bro.js] Plugin Sandbox Error: Cannot mutate property '${String(prop)}'.`);
+    },
+    deleteProperty(target, prop) {
+      throw new Error(`[bro.js] Plugin Sandbox Error: Cannot delete property '${String(prop)}'.`);
+    },
+    get(target, prop, receiver) {
+      const val = Reflect.get(target, prop, receiver);
+      if (typeof val === 'function') {
+        return val.bind(receiver);
+      }
+      if (val !== null && typeof val === 'object') {
+        return createReadOnlyProxy(val);
+      }
+      return val;
+    }
+  });
+}
+
 export class PluginManager {
   constructor() {
     this.plugins = [];
@@ -54,16 +76,23 @@ export class PluginManager {
   }
 
   async runOnInit(globalConfig, app) {
+    const safeConfig = createReadOnlyProxy(globalConfig);
+    const safeApp = createReadOnlyProxy(app);
     for (const hook of this.hooks.onInit) {
-      await hook(globalConfig, app);
+      await hook(safeConfig, safeApp);
     }
   }
 
   async runOnContext(ctx) {
+    const safeCtx = createReadOnlyProxy(ctx);
     for (const hook of this.hooks.onContext) {
-      const ext = await hook(ctx);
+      const ext = await hook(safeCtx);
       if (ext && typeof ext === 'object') {
-        Object.assign(ctx, ext);
+        for (const [k, v] of Object.entries(ext)) {
+          if (k !== '__proto__' && k !== 'constructor' && k !== 'prototype') {
+            ctx[k] = v;
+          }
+        }
       }
     }
   }

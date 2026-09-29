@@ -13,7 +13,7 @@ import { apiReference } from '@scalar/express-api-reference';
 import { verifyJwt, signJwt } from './auth.js';
 import { loadLocale } from './locale.js';
 import { loadRoutes } from './router.js';
-import { executeRequest, resolveIdentity, RouteRegistry } from './engine.js';
+import { executeRequest, resolveIdentity, RouteRegistry, verifyRouteAuth } from './engine.js';
 
 export function hashIdentity(identity) { return crypto.createHash('sha256').update(String(identity)).digest('hex'); }
 export function generateRateLimitKey(req, config, prefix = 'route') { const identity = resolveIdentity(req, config); return `bro:rate_limit:${prefix}:${req.originalUrl || req.url}:${hashIdentity(identity)}`; }
@@ -65,11 +65,14 @@ export async function createServer(globalConfig, routesDir, db) {
     const userConfig = typeof helmetConfig === 'object' ? helmetConfig : {};
     app.use(helmet({
       ...userConfig,
+      hsts: userConfig.hsts ?? { maxAge: 31536000, includeSubDomains: true, preload: true },
       contentSecurityPolicy: userConfig.contentSecurityPolicy ?? {
         directives: {
           ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-          "script-src": ["'self'", "'unsafe-inline'"],
-          "style-src": ["'self'", "'unsafe-inline'"],
+          "script-src": ["'self'"],
+          "style-src": ["'self'"],
+          "object-src": ["'none'"],
+          "base-uri": ["'self'"]
         },
       }
     }));
@@ -160,11 +163,15 @@ export async function createServer(globalConfig, routesDir, db) {
   }
 
   if (globalConfig.rateLimit) {
+    const limiterOptions = {
+      ...globalConfig.rateLimit,
+      keyGenerator: (req) => { const identity = resolveIdentity(req, globalConfig); return `bro:rate_limit:global:${hashIdentity(identity)}`; }
+    };
     if (redisClient) {
-      const fallbackLimiter = rateLimit(globalConfig.rateLimit);
+      const fallbackLimiter = rateLimit(limiterOptions);
       app.use(async (req, res, next) => {
         try {
-          const key = generateRateLimitKey(req, globalConfig, 'global');
+          const key = limiterOptions.keyGenerator(req);
           const current = await redisClient.incr(key);
           if (current === 1) {
             await redisClient.expire(key, Math.floor(globalConfig.rateLimit.windowMs / 1000));
@@ -179,7 +186,7 @@ export async function createServer(globalConfig, routesDir, db) {
         }
       });
     } else {
-      app.use(rateLimit(globalConfig.rateLimit));
+      app.use(rateLimit(limiterOptions));
     }
   }
   
@@ -212,6 +219,18 @@ export async function createServer(globalConfig, routesDir, db) {
     const bodySchema = routeConfig.body;
     const paramsSchema = routeConfig.params;
     const querySchema = routeConfig.query;
+    
+    if (routeConfig.auth) {
+      middlewares.push((req, res, next) => {
+        const authCheck = verifyRouteAuth(routeConfig, req.headers, globalConfig);
+        if (!authCheck.valid) {
+           return sendError(res, authCheck.status, authCheck.title, authCheck.details, req);
+        }
+        req._broUser = authCheck.user || null;
+        req._broAuthChecked = true;
+        next();
+      });
+    }
     
     if (routeConfig.upload) {
       const defaultLimits = { fileSize: 10 * 1024 * 1024, files: 5, fields: 20, parts: 25, fieldSize: 1024 * 1024 };
@@ -249,7 +268,9 @@ export async function createServer(globalConfig, routesDir, db) {
         params: req.params,
         files: req.files || req.file,
         ip: req.ip,
-        locale: locale.resolveLocale(req)
+        locale: locale.resolveLocale(req),
+        user: req._broUser,
+        authChecked: req._broAuthChecked
       };
       
       const ctxExtras = {
@@ -417,12 +438,12 @@ export async function createServer(globalConfig, routesDir, db) {
 
   const initialRoutes = await reload();
 
-  let taskManager = await scanTasks({ db, io });
+  let taskManager = await scanTasks({ db, io, redis: redisClient, logger: globalLogger });
 
   const reloadTasks = async () => {
     if (taskManager) taskManager.stopAll();
     await pluginManager.runOnShutdown();
-    taskManager = await scanTasks({ db, io });
+    taskManager = await scanTasks({ db, io, redis: redisClient, logger: globalLogger });
   };
 
   let isShuttingDown = false;

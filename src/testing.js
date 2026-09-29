@@ -103,25 +103,39 @@ export async function createTestHarness(globalConfig = {}, options = {}) {
     client(defaultHeaders = {}) {
        return {
          async fetch(route, fetchOpts = {}) {
-           const headers = { ...defaultHeaders, ...(fetchOpts.headers || {}) };
-           return fetch(`${testUrl}${route}`, { ...fetchOpts, headers });
+           const safeHeaders = {};
+           for (const [k, v] of Object.entries(defaultHeaders || {})) {
+             if (k !== '__proto__' && k !== 'constructor' && k !== 'prototype') safeHeaders[k] = v;
+           }
+           if (fetchOpts.headers) {
+             for (const [k, v] of Object.entries(fetchOpts.headers)) {
+               if (k !== '__proto__' && k !== 'constructor' && k !== 'prototype') safeHeaders[k] = v;
+             }
+           }
+           const safeOpts = { ...fetchOpts };
+           delete safeOpts.__proto__;
+           delete safeOpts.constructor;
+           
+           return fetch(`${testUrl}${route}`, { ...safeOpts, headers: safeHeaders });
          },
          async get(route, fetchOpts) { 
            return this.fetch(route, { method: 'GET', ...fetchOpts }); 
          },
          async post(route, body, fetchOpts = {}) { 
+           const reqHeaders = fetchOpts.headers || {};
            return this.fetch(route, { 
              method: 'POST', 
              body: JSON.stringify(body), 
-             headers: { 'Content-Type': 'application/json', ...(fetchOpts.headers || {}) }, 
+             headers: { 'Content-Type': 'application/json', ...reqHeaders }, 
              ...fetchOpts 
            }); 
          },
          async put(route, body, fetchOpts = {}) {
+           const reqHeaders = fetchOpts.headers || {};
            return this.fetch(route, { 
              method: 'PUT', 
              body: JSON.stringify(body), 
-             headers: { 'Content-Type': 'application/json', ...(fetchOpts.headers || {}) }, 
+             headers: { 'Content-Type': 'application/json', ...reqHeaders }, 
              ...fetchOpts 
            });
          },

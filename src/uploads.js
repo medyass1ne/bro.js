@@ -67,8 +67,15 @@ export class LocalStorageAdapter {
   }
 
   async save(fileStream, originalName, mimeType) {
-    const fileName = `${Date.now()}-${originalName}`;
-    const filePath = path.join(this.uploadDir, fileName);
+    const safeName = path.basename(originalName).replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const fileName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${safeName}`;
+    const filePath = path.resolve(path.join(this.uploadDir, fileName));
+    const resolvedUploadDir = path.resolve(this.uploadDir);
+    
+    if (!filePath.startsWith(resolvedUploadDir + path.sep)) {
+      throw new Error('Path traversal detected');
+    }
+    
     const writeStream = fs.createWriteStream(filePath);
     await new Promise((resolve, reject) => {
       fileStream.pipe(writeStream);
@@ -78,8 +85,47 @@ export class LocalStorageAdapter {
     return { url: `/uploads/${fileName}`, id: fileName, path: filePath };
   }
 
+  async store(multerFile) {
+    if (!multerFile || !multerFile.path) {
+      throw new Error('Invalid Multer file object. Must contain a valid path.');
+    }
+    const safeName = path.basename(multerFile.originalname).replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const fileName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${safeName}`;
+    const filePath = path.resolve(path.join(this.uploadDir, fileName));
+    const resolvedUploadDir = path.resolve(this.uploadDir);
+    
+    if (!filePath.startsWith(resolvedUploadDir + path.sep)) {
+      throw new Error('Path traversal detected');
+    }
+
+    try {
+      // Use rename first (fast atomic move on same device)
+      await fs.promises.rename(multerFile.path, filePath);
+    } catch (err) {
+      if (err.code === 'EXDEV') {
+        // Cross-device link error: gracefully fallback to copy and unlink
+        await fs.promises.copyFile(multerFile.path, filePath);
+        await fs.promises.unlink(multerFile.path).catch(() => {});
+      } else {
+        throw err;
+      }
+    }
+    return { url: `/uploads/${fileName}`, id: fileName, path: filePath };
+  }
+
   async delete(id) {
-    const filePath = path.join(this.uploadDir, id);
+    if (typeof id !== 'string') throw new Error('Invalid ID');
+    const safeId = path.basename(id);
+    if (safeId !== id) {
+      throw new Error('Path traversal detected in ID');
+    }
+    const filePath = path.resolve(path.join(this.uploadDir, safeId));
+    const resolvedUploadDir = path.resolve(this.uploadDir);
+    
+    if (!filePath.startsWith(resolvedUploadDir + path.sep)) {
+      throw new Error('Path traversal detected');
+    }
+    
     if (fs.existsSync(filePath)) {
       await fs.promises.unlink(filePath);
     }
@@ -102,7 +148,8 @@ export class S3StorageAdapter {
     const { Upload } = await import('@aws-sdk/lib-storage');
     
     const client = new S3Client(this.config);
-    const key = `${Date.now()}-${originalName}`;
+    const safeName = path.basename(originalName).replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const key = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${safeName}`;
     
     const upload = new Upload({
       client,

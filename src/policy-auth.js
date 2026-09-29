@@ -70,8 +70,8 @@ export class ApiKeyManager {
   async verifyKey(key) {
     if (!this.db) throw new Error('ApiKeyManager requires a database adapter');
     const hash = this.hashKey(key);
-    // Stub implementation for verify. DB adapter needs a specific findKey method.
-    return { valid: true, id: hash };
+    // This is a stub implementation. Developers must subclass ApiKeyManager or implement custom logic to query their DB.
+    throw new Error('Not implemented: ApiKeyManager.verifyKey is a stub and must be overridden with your database query logic.');
   }
 }
 
@@ -79,10 +79,25 @@ export const tenantContextPlugin = {
   name: 'bro-tenant-context',
   order: 10,
   onContext: async (ctx) => {
-    const tenantId = ctx.req?.headers['x-tenant-id'];
+    let tenantId = ctx.user?.tenantId;
+    if (!tenantId && process.env.TRUST_TENANT_HEADER === 'true') {
+      tenantId = ctx.req?.headers['x-tenant-id'];
+    }
     if (tenantId) {
        return { tenant: { id: tenantId } };
     }
     return {};
   }
 };
+
+export class SecurityContextGenerator {
+  generateCsrfToken() {
+    // Generates a cryptographically secure token instead of Math.random()
+    return crypto.randomBytes(32).toString('hex');
+  }
+
+  generateNonce() {
+    // Generates a cryptographically secure nonce instead of Math.random()
+    return crypto.randomBytes(16).toString('base64');
+  }
+}

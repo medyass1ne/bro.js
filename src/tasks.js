@@ -2,23 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import crypto from 'node:crypto';
-import cron from 'node-cron';
 import { colors } from './logger.js';
 import { scanDir } from './router.js';
-
-export class TaskManager {
-  constructor() {
-    this.taskHandles = [];
-  }
-  
-  stopAll() {
-    this.taskHandles.forEach(t => t.stop());
-    this.taskHandles = [];
-  }
-}
+import { TaskManager } from './task-engine.js';
 
 export async function scanTasks(ctx) {
-  const manager = new TaskManager();
+  const manager = new TaskManager({ redisClient: ctx.redis, logger: ctx.logger || console });
   const tasksDir = path.join(process.cwd(), 'tasks');
   if (!fs.existsSync(tasksDir)) return manager;
   
@@ -32,14 +21,15 @@ export async function scanTasks(ctx) {
       const taskModule = await import(moduleUrl);
       
       if (taskModule.cron && typeof taskModule.handler === 'function') {
-        const task = cron.schedule(taskModule.cron, async () => {
-          try {
-            await taskModule.handler(ctx);
-          } catch (err) {
-            console.error(`\n  ${colors.red}❌ Task Error (${file}):${colors.reset}`, err);
-          }
-        });
-        manager.taskHandles.push(task);
+        const taskName = path.basename(file, '.js');
+        manager.register(taskName, taskModule.cron, async () => {
+           try {
+             await taskModule.handler(ctx);
+           } catch (err) {
+             console.error(`\n  ${colors.red}❌ Task Error (${file}):${colors.reset}`, err);
+             throw err; // Re-throw so TaskManager can handle retries/DLQ
+           }
+        }, taskModule.options || {});
         count++;
       }
     } catch (err) {
@@ -48,6 +38,7 @@ export async function scanTasks(ctx) {
   }
   
   if (count > 0) {
+    manager.startAll();
     console.log(`  ${colors.dim}├──${colors.reset} ${colors.cyan}Scheduled ${count} background task(s)${colors.reset}`);
   }
   

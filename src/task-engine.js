@@ -45,8 +45,11 @@ export class TaskManager {
     if (!task) throw new Error(`Task '${name}' not found`);
 
     const leaseKey = `bro:task_lease:${name}`;
+    let lockVal = null;
     if (this.redisClient) {
-       const acquired = await this.redisClient.set(leaseKey, 'locked', { NX: true, PX: task.options.timeoutMs });
+       const crypto = await import('node:crypto');
+       lockVal = crypto.randomUUID();
+       const acquired = await this.redisClient.set(leaseKey, lockVal, { NX: true, PX: task.options.timeoutMs });
        if (!acquired) {
          this.logger.debug(`[bro.js/tasks] Task '${name}' skipped (locked)`);
          return;
@@ -56,14 +59,26 @@ export class TaskManager {
     let attempt = 0;
     while (attempt < task.options.retries) {
       try {
+        const ac = new AbortController();
         await Promise.race([
-          task.handler(),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('Task Timeout')), task.options.timeoutMs))
+          task.handler({ signal: ac.signal }),
+          new Promise((_, rej) => setTimeout(() => {
+            ac.abort();
+            rej(new Error('Task Timeout'));
+          }, task.options.timeoutMs))
         ]);
         break; // Success
       } catch (err) {
         attempt++;
         this.logger.error(`[bro.js/tasks] Task '${name}' attempt ${attempt} failed: ${err.message}`);
+        
+        if (err.message === 'Task Timeout') {
+          if (task.options.deadLetter && this.redisClient) {
+            await this.redisClient.rPush('bro:dead_letter_queue', JSON.stringify({ name, error: err.message, time: Date.now() }));
+          }
+          break; // Avoid overlapping executions by skipping retries on timeout
+        }
+
         if (attempt >= task.options.retries) {
           if (task.options.deadLetter && this.redisClient) {
             await this.redisClient.rPush('bro:dead_letter_queue', JSON.stringify({ name, error: err.message, time: Date.now() }));
@@ -73,7 +88,17 @@ export class TaskManager {
         }
       }
     }
-    if (this.redisClient) await this.redisClient.del(leaseKey);
+    
+    if (this.redisClient && lockVal) {
+      const script = `
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+          return redis.call("del", KEYS[1])
+        else
+          return 0
+        end
+      `;
+      await this.redisClient.eval(script, { keys: [leaseKey], arguments: [lockVal] }).catch(() => {});
+    }
   }
 
   async _handleDeadLetter(name, error) {

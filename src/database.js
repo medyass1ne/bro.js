@@ -103,3 +103,35 @@ export class PostgresAdapter extends BaseDatabaseAdapter {
     }
   }
 }
+
+/**
+ * Database Manager wrapper providing higher-level functionality like caching.
+ */
+export class DatabaseManager {
+  constructor(adapter) {
+    this.adapter = adapter;
+  }
+
+  async cacheQuery(redisClient, key, queryFn, ttl = 3600) {
+    if (redisClient) {
+      const cached = await redisClient.get(key);
+      if (cached) {
+        return JSON.parse(cached, (k, v) => {
+          // Block malicious Function injection previously possible
+          if (typeof v === 'string' && v.startsWith('Function(')) {
+             throw new Error('[bro.js] Security Exception: Code execution from cache is blocked.');
+          }
+          return v;
+        });
+      }
+    }
+    
+    const result = await queryFn(this.adapter);
+    
+    if (redisClient && result !== undefined && result !== null) {
+      await redisClient.set(key, JSON.stringify(result), { EX: ttl });
+    }
+    
+    return result;
+  }
+}

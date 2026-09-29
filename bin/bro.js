@@ -250,7 +250,7 @@ export default defineConfig({
     let globalConfig = {};
     if (fs.existsSync(configPath)) {
       try {
-        const configModule = await import(configPath);
+        const configModule = await import(pathToFileURL(configPath).href);
         globalConfig = configModule.default || configModule;
       } catch (e) {}
     }

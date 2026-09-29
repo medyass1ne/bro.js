@@ -26,3 +26,11 @@ SYNTAX_COMPARISON_v2_vs_v3.md
 .env.example
 .cursorrules
 agents.md
+/AUDIT
+/REMEDIATION
+test-*.js
+/tests
+/test_routes_tmp
+/test_routes
+test-*.log
+/tasks

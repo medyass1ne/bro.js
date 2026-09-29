@@ -85,15 +85,17 @@ export function createLogger(config = {}) {
 
   const redactKeys = config.redact || ['password', 'token', 'secret', 'authorization'];
   
-  const redact = (obj) => {
+  const redact = (obj, seen = new WeakSet()) => {
     if (typeof obj !== 'object' || obj === null) return obj;
-    if (Array.isArray(obj)) return obj.map(redact);
+    if (seen.has(obj)) return '[CIRCULAR]';
+    seen.add(obj);
+    if (Array.isArray(obj)) return obj.map(item => redact(item, seen));
     const newObj = { ...obj };
     for (const key of Object.keys(newObj)) {
       if (redactKeys.some(r => key.toLowerCase().includes(r))) {
         newObj[key] = '[REDACTED]';
       } else if (typeof newObj[key] === 'object') {
-        newObj[key] = redact(newObj[key]);
+        newObj[key] = redact(newObj[key], seen);
       }
     }
     return newObj;
@@ -111,6 +113,96 @@ export function createLogger(config = {}) {
       let metaStr = Object.keys(meta).length ? ` ${colors.dim}${JSON.stringify(redact(meta))}${colors.reset}` : '';
       console[level === 'debug' ? 'log' : level](`${colors.dim}[${timestamp}]${colors.reset} ${c}[${level.toUpperCase()}]${colors.reset} ${message}${metaStr}`);
     }
+  };
+
+  return {
+    debug: (msg, meta) => log('debug', msg, meta),
+    info: (msg, meta) => log('info', msg, meta),
+    warn: (msg, meta) => log('warn', msg, meta),
+    error: (msg, meta) => log('error', msg, meta),
+    time: (label) => {
+      const start = performance.now();
+      return (msg, meta) => log('info', msg || `${label} completed`, { ...meta, durationMs: performance.now() - start });
+    }
+  };
+}
+
+export function createFileLogger(config = {}) {
+  const isJson = config.format === 'json';
+  const levelPriority = { debug: 0, info: 1, warn: 2, error: 3, silent: 4 };
+  const currentLevel = levelPriority[config.level] ?? levelPriority.info;
+  const logPath = config.path || path.join(process.cwd(), 'bro-framework.log');
+  
+  // Log rotation limits
+  const maxSizeBytes = config.maxSizeBytes || 10 * 1024 * 1024; // Default 10MB
+  const maxFiles = config.maxFiles || 5;
+
+  const rotateLogs = async (filePath) => {
+    try {
+      const stats = await fs.promises.stat(filePath).catch(() => null);
+      if (!stats || stats.size < maxSizeBytes) return;
+
+      // Rotate existing files
+      for (let i = maxFiles - 1; i >= 1; i--) {
+        const oldFile = `${filePath}.${i}`;
+        const newFile = `${filePath}.${i + 1}`;
+        if (fs.existsSync(oldFile)) {
+          if (i + 1 > maxFiles) {
+            await fs.promises.unlink(oldFile).catch(() => {});
+          } else {
+            await fs.promises.rename(oldFile, newFile).catch(() => {});
+          }
+        }
+      }
+      
+      // Move current file to .1
+      await fs.promises.rename(filePath, `${filePath}.1`).catch(() => {});
+    } catch (err) {
+      console.error('[bro.js] Failed to rotate logs:', err);
+    }
+  };
+
+  const redactKeys = config.redact || ['password', 'token', 'secret', 'authorization'];
+  
+  const redact = (obj, seen = new WeakSet()) => {
+    if (typeof obj !== 'object' || obj === null) return obj;
+    if (seen.has(obj)) return '[CIRCULAR]';
+    seen.add(obj);
+    if (Array.isArray(obj)) return obj.map(item => redact(item, seen));
+    const newObj = { ...obj };
+    for (const key of Object.keys(newObj)) {
+      if (redactKeys.some(r => key.toLowerCase().includes(r))) {
+        newObj[key] = '[REDACTED]';
+      } else if (typeof newObj[key] === 'object') {
+        newObj[key] = redact(newObj[key], seen);
+      }
+    }
+    return newObj;
+  };
+
+  const writeStream = fs.createWriteStream(logPath, { flags: 'a' });
+
+  let isRotating = false;
+
+  const log = (level, message, meta = {}) => {
+    if (levelPriority[level] < currentLevel) return;
+    const timestamp = new Date().toISOString();
+    
+    let logLine = '';
+    if (isJson) {
+      logLine = JSON.stringify({ level, timestamp, message, ...redact(meta) }) + '\n';
+    } else {
+      let metaStr = Object.keys(meta).length ? ` ${JSON.stringify(redact(meta))}` : '';
+      logLine = `[${timestamp}] [${level.toUpperCase()}] ${message}${metaStr}\n`;
+    }
+    
+    fs.promises.appendFile(logPath, logLine).then(async () => {
+      if (!isRotating) {
+        isRotating = true;
+        await rotateLogs(logPath);
+        isRotating = false;
+      }
+    }).catch(() => {});
   };
 
   return {

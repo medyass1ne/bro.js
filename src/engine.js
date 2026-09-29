@@ -18,7 +18,8 @@ export function resolveIdentity(req, config = {}) {
     if (xff) {
       const ips = xff.split(',').map(s => s.trim()).filter(Boolean);
       if (ips.length > 0) {
-         ip = ips[0];
+         const proxyCount = typeof config.trustProxy === 'number' ? config.trustProxy : 1;
+         ip = ips[Math.max(0, ips.length - proxyCount)];
       }
     }
   }
@@ -80,6 +81,50 @@ export function formatErrorEnvelope(status, title, details, reqId, instanceUrl =
   return payload;
 }
 
+export function verifyRouteAuth(routeConfig, headers, globalConfig) {
+  if (routeConfig.auth === 'api-key') {
+    const apiKey = headers['x-api-key'] || (headers['authorization'] || '').replace('Bearer ', '');
+    const validKey = globalConfig.auth?.apiKey || process.env.API_KEY;
+    
+    let validKeys = [];
+    if (Array.isArray(validKey)) {
+      validKeys = validKey;
+    } else if (typeof validKey === 'string' && validKey.includes(',')) {
+      validKeys = validKey.split(',').map(k => k.trim());
+    } else if (validKey) {
+      validKeys = [validKey];
+    }
+    
+    const isValid = apiKey && validKeys.includes(apiKey);
+    
+    if (!isValid) {
+      return { valid: false, status: 401, title: 'Unauthorized', details: 'Missing or invalid API key' };
+    }
+    return { valid: true };
+  } else if (routeConfig.auth) {
+    const authHeader = headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return { valid: false, status: 401, title: 'Unauthorized', details: 'Missing or invalid Bearer token' };
+    }
+    
+    const token = authHeader.split(' ')[1] ?? '';
+    const authResult = verifyJwt(token, globalConfig.jwtSecret);
+    
+    if (!authResult.valid) {
+      return { valid: false, status: 401, title: 'Unauthorized', details: authResult.error };
+    }
+    
+    const user = authResult.payload ?? null;
+    if (Array.isArray(routeConfig.auth) && routeConfig.auth.length > 0) {
+       if (!user || !user.role || !routeConfig.auth.includes(user.role)) {
+          return { valid: false, status: 403, title: 'Forbidden', details: 'Insufficient role permissions' };
+       }
+    }
+    return { valid: true, user };
+  }
+  return { valid: true };
+}
+
 /**
  * The transport-agnostic execution pipeline.
  * @param {Object} routeConfig - The exported configuration from defineRoute.
@@ -136,38 +181,15 @@ export async function executeRequest(routeConfig, requestData, globalConfig, ctx
     }
 
     // Auth verification
-    if (routeConfig.auth === 'api-key') {
-      const apiKey = requestData.headers['x-api-key'] || (requestData.headers['authorization'] || '').replace('Bearer ', '');
-      const validKey = globalConfig.auth?.apiKey || process.env.API_KEY;
-      
-      let isValid = false;
-      if (Array.isArray(validKey)) {
-        isValid = validKey.includes(apiKey);
+    if (routeConfig.auth) {
+      if (requestData.authChecked) {
+        ctx.user = requestData.user || null;
       } else {
-        isValid = apiKey && apiKey === validKey;
-      }
-      
-      if (!isValid) {
-        return { status: 401, headers: errorHeaders, body: formatErrorEnvelope(401, 'Unauthorized', 'Missing or invalid API key', reqId, requestData.originalUrl) };
-      }
-    } else if (routeConfig.auth) {
-      const authHeader = requestData.headers['authorization'];
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return { status: 401, headers: errorHeaders, body: formatErrorEnvelope(401, 'Unauthorized', 'Missing or invalid Bearer token', reqId, requestData.originalUrl) };
-      }
-      
-      const token = authHeader.split(' ')[1] ?? '';
-      const authResult = verifyJwt(token, globalConfig.jwtSecret);
-      
-      if (!authResult.valid) {
-        return { status: 401, headers: errorHeaders, body: formatErrorEnvelope(401, 'Unauthorized', authResult.error, reqId, requestData.originalUrl) };
-      }
-      ctx.user = authResult.payload ?? null;
-      
-      if (Array.isArray(routeConfig.auth) && routeConfig.auth.length > 0) {
-         if (!ctx.user || !ctx.user.role || !routeConfig.auth.includes(ctx.user.role)) {
-            return { status: 403, headers: errorHeaders, body: formatErrorEnvelope(403, 'Forbidden', 'Insufficient role permissions', reqId, requestData.originalUrl) };
-         }
+        const authCheck = verifyRouteAuth(routeConfig, requestData.headers, globalConfig);
+        if (!authCheck.valid) {
+          return { status: authCheck.status, headers: errorHeaders, body: formatErrorEnvelope(authCheck.status, authCheck.title, authCheck.details, reqId, requestData.originalUrl) };
+        }
+        ctx.user = authCheck.user || null;
       }
     }
 

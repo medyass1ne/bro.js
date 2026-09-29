@@ -4,24 +4,61 @@ import crypto from 'node:crypto';
  * Pino Logger Adapter for bro.js plugins
  */
 export function createPinoAdapter(pinoInstance, options = {}) {
-  const redactPaths = options.redact || ['req.headers.authorization', 'req.headers.cookie'];
-  if (!pinoInstance.redact) {
-    pinoInstance.redact = redactPaths;
-  }
+  const redactKeys = options.redact || ['password', 'token', 'secret', 'authorization', 'cookie'];
+  
+  const redact = (obj, seen = new WeakSet()) => {
+    if (typeof obj !== 'object' || obj === null) return obj;
+    if (seen.has(obj)) return '[CIRCULAR]';
+    seen.add(obj);
+    if (Array.isArray(obj)) return obj.map(item => redact(item, seen));
+    const newObj = { ...obj };
+    for (const key of Object.keys(newObj)) {
+      if (redactKeys.some(r => key.toLowerCase().includes(r))) {
+        newObj[key] = '[REDACTED]';
+      } else if (typeof newObj[key] === 'object') {
+        newObj[key] = redact(newObj[key], seen);
+      }
+    }
+    return newObj;
+  };
+
+  const wrapLogger = (logger) => {
+    return new Proxy(logger, {
+      get(target, prop) {
+        const val = target[prop];
+        if (typeof val === 'function' && ['fatal', 'error', 'warn', 'info', 'debug', 'trace'].includes(prop)) {
+          return function(obj, ...args) {
+            if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+              return val.call(target, redact(obj), ...args);
+            }
+            return val.call(target, obj, ...args);
+          };
+        }
+        if (prop === 'child') {
+          return function(...args) {
+            return wrapLogger(target.child(...args));
+          };
+        }
+        return typeof val === 'function' ? val.bind(target) : val;
+      }
+    });
+  };
+
+  const safePino = wrapLogger(pinoInstance);
   
   return {
     name: 'bro-pino-adapter',
     order: 5,
     onContext: (ctx) => {
       return {
-        log: pinoInstance.child({ reqId: ctx.env?.TRACE_ID || crypto.randomUUID() })
+        log: safePino.child({ reqId: ctx.env?.TRACE_ID || crypto.randomUUID() })
       };
     },
     onRequest: (req, res) => {
-      pinoInstance.info({ req: { method: req.method, url: req.url, headers: req.headers } }, 'Request received');
+      safePino.info({ req: { method: req.method, url: req.url, headers: req.headers } }, 'Request received');
     },
     onError: (err, req, res) => {
-      pinoInstance.error({ err, reqId: req.id || req.headers['x-request-id'] }, 'Request failed');
+      safePino.error({ err, reqId: req.id || req.headers['x-request-id'] }, 'Request failed');
     }
   };
 }
@@ -39,8 +76,30 @@ export function setupOpenTelemetry(sdkConfig) {
     onContext: (ctx) => {
       // W3C Trace Propagation
       const traceparent = ctx.req?.headers['traceparent'];
+      const tracestate = ctx.req?.headers['tracestate'];
+      
+      let traceId = crypto.randomBytes(16).toString('hex');
+      let parentId = '';
+      let traceFlags = '00';
+      
+      if (traceparent) {
+        const parts = traceparent.split('-');
+        if (parts.length === 4) {
+          traceId = parts[1];
+          parentId = parts[2];
+          traceFlags = parts[3];
+        }
+      }
+      
+      const spanId = crypto.randomBytes(8).toString('hex');
+      
       return {
-        traceId: traceparent ? traceparent.split('-')[1] : crypto.randomUUID()
+        traceId,
+        spanId,
+        parentId,
+        traceFlags,
+        traceparent: `00-${traceId}-${spanId}-${traceFlags}`,
+        tracestate: tracestate || ''
       };
     },
     onRequest: (req, res) => {
